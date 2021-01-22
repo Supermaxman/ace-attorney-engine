@@ -102,14 +102,13 @@ if __name__ == '__main__':
 				if line != '':
 					current_line.append(line)
 
-	print()
-	for idx, comment in enumerate(comments):
-		emotion = comment.emotion if comment.score > 0.5 else 'normal'
-		print(f'{idx+1} {comment.score:.2f}: {emotion}')
+	# print()
+	# for idx, comment in enumerate(comments):
+	# 	emotion = comment.emotion if comment.score > 0.5 else 'normal'
+	# 	print(f'{idx+1} {comment.score:.2f}: {emotion}')
 	engine.comments_to_scene(
 			comments,
 			emotion_threshold=emotion_threshold,
 			output_filename=output_filename,
 			assets_folder='D:/Data/ace-attorney-reddit-bot-assets'
 	)
-
