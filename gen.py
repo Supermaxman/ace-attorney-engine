@@ -1,4 +1,3 @@
-
 import os
 from tqdm import tqdm
 import torch
@@ -24,18 +23,12 @@ class Author(object):
 
 if __name__ == '__main__':
   # settings
-  assets_folder       = Settings.ASSETS_FOLDER
+  asset_folder        = Settings.ASSETS_FOLDER
   data_path           = Settings.DATA_PATH
   os.environ["PATH"] += Settings.FFMPEG_PATH
   model_name          = Settings.MODEL_NAME
   output_filename     = Settings.OUTPUT_FILENAME
-
-  # make sure output folder exists before running program
-  os.makedirs(os.path.dirname(output_filename), exist_ok=True)
-
-  # TODO: should these be put into Settings.py
-  max_length = None
-  emotion_threshold = 0.5
+  max_comments = 30
 
   tokenizer = AutoTokenizer.from_pretrained(model_name)
   model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
@@ -64,67 +57,53 @@ if __name__ == '__main__':
 
   characters = [
     Author(
-      name='Randolph',
+      name='Holt',
       character=engine.Character.JUDGE
     ),
     Author(
-      name='Kaffee',
+      name='Clinton',
       character=engine.Character.PHOENIX
     ),
     Author(
-      name='Jessep',
-      character=engine.Character.GUMSHOE
-    ),
-    Author(
-      name='Ross',
+      name='Trump',
       character=engine.Character.EDGEWORTH
     ),
   ]
 
   c_map = {c.name: c for c in characters}
   comments = []
-  current_line = []
-  current_character = None
-  previous_character = None
-
-  with open(data_path) as f:
+  current_c_name = None
+  with open(data_path, errors='ignore') as f:
     lines = list(f)
+    for line in tqdm(lines):
+      line = line.strip()
+      if not line or line.startswith('('):
+        continue
+      line = line.replace('[Interruption]', '')
+      line = line.split(':')
+      c_name = line[0].strip().lower().capitalize()
+      if c_name in c_map:
+        current_c_name = c_name
+        t = ':'.join(line[1:])
+      else:
+        t = ':'.join(line)
+      emotion, score = get_emotion(t)
+      comment = Comment(
+        body=t,
+        emotion=emotion,
+        score=score,
+        author=c_map[current_c_name]
+      )
+      comments.append(comment)
+      if max_comments is not None and len(comments) >= max_comments:
+        break
 
-    for line in tqdm(lines, desc='reading script'):
-      if line.startswith('    ' * 9):
-        current_character = c_map[line.strip().lower().capitalize()]
+  for comment in comments:
+    print(f'{comment.author.name}: ({comment.emotion}|{comment.score}) {comment.body}')
 
-        if previous_character is not None and previous_character != current_character:
-          t = ' '.join(current_line)
-          emotion, score = get_emotion(t)
-          comment = Comment(
-            body=t,
-            emotion=emotion,
-            score=score,
-            author=previous_character
-          )
-          comments.append(comment)
-
-          if max_length is not None and len(comments) >= max_length:
-            break
-
-          current_line.clear()
-        previous_character = current_character
-      elif line.startswith('    ' * 7):
-        pass
-      elif line.startswith('    ' * 6):
-        line = line.strip()
-
-        if line != '':
-          current_line.append(line)
-
-  # print()
-  # for idx, comment in enumerate(comments):
-  #   emotion = comment.emotion if comment.score > 0.5 else 'normal'
-  #   print(f'{idx+1} {comment.score:.2f}: {emotion}')
   engine.comments_to_scene(
       comments,
-      emotion_threshold=emotion_threshold,
       output_filename=output_filename,
-      assets_folder=Settings.ASSETS_FOLDER
+      assets_folder=asset_folder,
+      emotion_threshold=0.5
   )
