@@ -243,6 +243,9 @@ class AnimScene:
   def __init__(self, arr: List, length: int, start_frame: int = 0):
     self.frames = []
     text_idx = 0
+    arr = list(
+      filter(lambda x: x is not None, arr)
+    )
     #     print([str(x) for x in arr])
     for idx in range(start_frame, length + start_frame):
       if isinstance(arr[0], AnimImg):

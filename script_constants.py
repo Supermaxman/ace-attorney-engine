@@ -1,6 +1,7 @@
 
 from enum import IntEnum
 
+
 class Location(IntEnum):
   COURTROOM_LEFT = 1
   WITNESS_STAND = 2
@@ -35,6 +36,7 @@ class Action(IntEnum):
   SHAKE_EFFECT = 2
   OBJECTION = 3
   TEXT_SHAKE_EFFECT = 4
+  HOLD_IT = 5
 
 
 location_map = {
@@ -88,7 +90,15 @@ character_location_map = {
 # fear
 # surprise
 objection_emotions = {
-  'anger', 'surprise', 'fear'
+  'anger'
+}
+
+shake_emotions = {
+  'joy'
+}
+
+hold_it_emotions = {
+  'surprise'
 }
 
 character_emotions = {
@@ -97,44 +107,48 @@ character_emotions = {
   # "sad": ["emo", "handondesk"],
   Character.EDGEWORTH: {
     "sadness": ["emo"],
-    "joy": ["confident", "pointing", "document", "normal", "thinking"],
+    "joy": ["confident", "pointing"],
     "love": ["smirk"],
     "anger": ["handondesk"],
     "fear": ["emo"],
     "surprise": ["handondesk"],
+    "normal": ["document", "normal", "thinking"]
   },
   # "happy": ["confident", "pointing", "handsondesk"],
   # "neutral": ["document", "normal", "thinking", "coffee"],
   # "sad": ["emo", "sheepish", "sweating"],
   Character.PHOENIX: {
     "sadness": ["emo"],
-    "joy": ["confident", "pointing", "document", "normal", "thinking", "coffee"],
+    "joy": ["confident", "pointing"],
     "love": ["confident", "pointing"],
     "anger": ["handsondesk"],
     "fear": ["emo", "sweating", "sheepish"],
     "surprise": ["handsondesk"],
+    "normal": ["document", "normal", "thinking", "coffee"]
   },
   # "happy": ["bench"],
   # "neutral": ["bench-hum", "bench-profile"],
   # "sad": ["bench-strict", "bench-ugh"],
   Character.MAYA: {
     "sadness": ["bench-strict", "bench-ugh"],
-    "joy": ["bench-hum", "bench-profile"],
+    "joy": ["bench-hum"],
     "love": ["bench"],
     "anger": ["bench-strict"],
     "fear": ["bench-ugh"],
     "surprise": ["bench-hum"],
+    "normal": ["bench-profile"],
   },
   # "happy": ["hello"],
   # "neutral": ["normal"],
   # "sad": ["extra", "mad", "nervous"],
   Character.LARRY: {
     "sadness": ["extra"],
-    "joy": ["normal"],
+    "joy": ["hello"],
     "love": ["hello"],
     "anger": ["mad"],
     "fear": ["nervous"],
     "surprise": ["nervous"],
+    "normal": ["normal"],
   },
   # "happy": ["normal"],
   # "neutral": ["normal"],
@@ -146,17 +160,19 @@ character_emotions = {
     "anger": ["pointing"],
     "fear": ["steams"],
     "surprise": ["steams"],
+    "normal": ["normal"],
   },
   # "happy": ["ha"],
   # "neutral": ["ready"],
   # "sad": ["mad", "sweating", "withwhip"],
   Character.FRANZISKA: {
     "sadness": ["sweating"],
-    "joy": ["ready"],
+    "joy": ["ha"],
     "love": ["ha"],
     "anger": ["mad"],
     "fear": ["sweating"],
     "surprise": ["withwhip"],
+    "normal": ["ready"],
   },
   # "happy": ["nodding"],
   # "neutral": ["normal"],
@@ -168,6 +184,7 @@ character_emotions = {
     "anger": ["warning"],
     "fear": ["warning"],
     "surprise": ["warning"],
+    "normal": ["normal"],
   },
   # "happy": ["smirk", "snap"],
   # "neutral": ["normal"],
@@ -179,6 +196,7 @@ character_emotions = {
     "anger": ["break"],
     "fear": ["sweat"],
     "surprise": ["break"],
+    "normal": ["normal"],
   },
   # "happy": ["confident"],
   # "neutral": ["normal"],
@@ -190,50 +208,55 @@ character_emotions = {
     "anger": ["sweating"],
     "fear": ["sweating"],
     "surprise": ["sweating"],
+    "normal": ["normal"],
   },
   # "happy": ["pumped", "shining"],
   # "neutral": ["normal"],
   # "sad": ["sad"],
   Character.MAGGEY: {
     "sadness": ["sad"],
-    "joy": ["normal"],
-    "love": ["pumped", "shining"],
+    "joy": ["pumped"],
+    "love": ["shining"],
     "anger": ["sad"],
     "fear": ["sad"],
     "surprise": ["sad"],
+    "normal": ["normal"],
   },
   # "happy": ["sparkle", "surprised"],
   # "neutral": ["normal", "shy", "thinking"],
   # "sad": ["cries", "disappointed", "fight"],
   Character.PEARL: {
     "sadness": ["cries"],
-    "joy": ["normal", "thinking", "shy"],
+    "joy": ["sparkle"],
     "love": ["sparkle"],
     "anger": ["fight", "disappointed"],
     "fear": ["cries"],
     "surprise": ["surprised"],
+    "normal": ["normal", "thinking", "shy"],
   },
   # "happy": ["confident", "smiling"],
   # "neutral": ["normal", "shy", "thinking"],
   # "sad": ["badmood", "disappointed", "mad"],
   Character.LOTTA: {
     "sadness": ["badmood"],
-    "joy": ["normal", "shy", "thinking"],
+    "joy": ["confident", "smiling"],
     "love": ["confident", "smiling"],
     "anger": ["mad", "disappointed"],
     "fear": ["badmood"],
     "surprise": ["mad"],
+    "normal": ["normal", "shy", "thinking"],
   },
   # "happy": ["laughing", "confident", "pumped"],
   # "neutral": ["normal", "shy", "side", "thinking"],
   # "sad": ["disheartened", "mad"],
   Character.GUMSHOE: {
     "sadness": ["disheartened"],
-    "joy": ["normal", "side", "thinking"],
+    "joy": ["side"],
     "love": ["laughing", "confident", "pumped"],
     "anger": ["mad"],
     "fear": ["disheartened"],
     "surprise": ["disheartened"],
+    "normal": ["normal", "side", "thinking"],
   },
   # "happy": ["normal"],
   # "neutral": ["normal"],
@@ -245,12 +268,14 @@ character_emotions = {
     "anger": ["sweating"],
     "fear": ["sweating"],
     "surprise": ["sweating"],
+    "normal": ["normal"],
   },
 }
 
 audio_emotions = {
   "normal": "03 - Turnabout Courtroom - Trial",
   "objection": "08 - Pressing Pursuit _ Cornered",
+  "holdit": "11 - Pressing Pursuit _ Cornered , Variation",
   "sadness": "10 - Suspense",
   "joy": "03 - Turnabout Courtroom - Trial",
   "love": "05 - Logic and Trick",

@@ -1,2 +1,6 @@
-text overflow on long sentences
-audio cuts out after a minute or two
+music cuts out at end of video
+need to abstract away actions
+ffmpeg speed
+hold it sfx
+take effect & sfx
+update sfx from http://www.court-records.net/audio.htm
