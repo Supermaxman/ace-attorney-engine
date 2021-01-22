@@ -1,7 +1,9 @@
 
 import os
 from tqdm import tqdm
+import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
 import engine
 
 
@@ -23,10 +25,14 @@ if __name__ == '__main__':
 	data_path = 'D:\\Data\\A-Few-Good-Men\\truth.txt'
 	model_name = 'mrm8488/t5-base-finetuned-emotion'
 	os.environ["PATH"] += ';C:/Program Files/ffmpeg-4.3.1/bin/'
+	max_length = None
+	emotion_threshold = 0.5
+	output_filename = 'output/Truth-debug-v1.mp4'
 
 	tokenizer = AutoTokenizer.from_pretrained(model_name)
 	model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
+	norm = torch.nn.Softmax(dim=-1)
 
 	def get_emotion(text):
 		input_ids = tokenizer.encode(
@@ -36,13 +42,15 @@ if __name__ == '__main__':
 
 		output = model.generate(
 			input_ids=input_ids,
-			max_length=2
+			max_length=2,
+			output_scores=True,
+			return_dict_in_generate=True
 		)
-
-		dec = [tokenizer.decode(ids) for ids in output]
+		dec = [tokenizer.decode(ids) for ids in output.sequences]
+		scores = norm(output.scores[0])
+		score = float(scores.max(dim=-1)[0][0])
 		label = dec[0].replace('<pad>', '').strip()
-		return label
-
+		return label, score
 
 	characters = [
 		Author(
@@ -70,17 +78,21 @@ if __name__ == '__main__':
 	previous_character = None
 	with open(data_path) as f:
 		lines = list(f)
-		for line in tqdm(lines):
+		for line in tqdm(lines, desc='reading script...'):
 			if line.startswith('    ' * 9):
 				current_character = c_map[line.strip().lower().capitalize()]
 				if previous_character is not None and previous_character != current_character:
 					t = ' '.join(current_line)
+					emotion, score = get_emotion(t)
 					comment = Comment(
 						body=t,
-						emotion=get_emotion(t),
+						emotion=emotion,
+						score=score,
 						author=previous_character
 					)
 					comments.append(comment)
+					if max_length is not None and len(comments) >= max_length:
+						break
 					current_line.clear()
 				previous_character = current_character
 			elif line.startswith('    ' * 7):
@@ -90,9 +102,13 @@ if __name__ == '__main__':
 				if line != '':
 					current_line.append(line)
 
-	output_filename = 'output/Truth-debug-v1.mp4'
+	print()
+	for idx, comment in enumerate(comments):
+		emotion = comment.emotion if comment.score > 0.5 else 'normal'
+		print(f'{idx+1} {comment.score:.2f}: {emotion}')
 	engine.comments_to_scene(
-			comments[:10],
+			comments,
+			emotion_threshold=emotion_threshold,
 			output_filename=output_filename,
 			assets_folder='D:/Data/ace-attorney-reddit-bot-assets'
 	)
