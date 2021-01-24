@@ -23,18 +23,26 @@ class Author(object):
 
 
 if __name__ == '__main__':
-  data_path = Settings.DATA_PATH
-  model_name = Settings.MODEL_NAME
+  # settings
+  assets_folder       = Settings.ASSETS_FOLDER
+  data_path           = Settings.DATA_PATH
   os.environ["PATH"] += Settings.FFMPEG_PATH
+  model_name          = Settings.MODEL_NAME
+  output_filename     = Settings.OUTPUT_FILENAME
+
+  # make sure output folder exists before running program
+  os.makedirs(os.path.dirname(output_filename), exist_ok=True)
+
+  # TODO: should these be put into Settings.py
   max_length = None
   emotion_threshold = 0.5
-  output_filename = Settings.OUTPUT_FILENAME
 
   tokenizer = AutoTokenizer.from_pretrained(model_name)
   model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-
   norm = torch.nn.Softmax(dim=-1)
 
+  # TODO: move this out of the main section
+  # TODO: don't be lazy and use the defined variables, pass them instead
   def get_emotion(text):
     input_ids = tokenizer.encode(
       text + '</s>',
@@ -51,6 +59,7 @@ if __name__ == '__main__':
     scores = norm(output.scores[0])
     score = float(scores.max(dim=-1)[0][0])
     label = dec[0].replace('<pad>', '').strip()
+
     return label, score
 
   characters = [
@@ -77,11 +86,14 @@ if __name__ == '__main__':
   current_line = []
   current_character = None
   previous_character = None
+
   with open(data_path) as f:
     lines = list(f)
-    for line in tqdm(lines, desc='reading script...'):
+
+    for line in tqdm(lines, desc='reading script'):
       if line.startswith('    ' * 9):
         current_character = c_map[line.strip().lower().capitalize()]
+
         if previous_character is not None and previous_character != current_character:
           t = ' '.join(current_line)
           emotion, score = get_emotion(t)
@@ -92,14 +104,17 @@ if __name__ == '__main__':
             author=previous_character
           )
           comments.append(comment)
+
           if max_length is not None and len(comments) >= max_length:
             break
+
           current_line.clear()
         previous_character = current_character
       elif line.startswith('    ' * 7):
         pass
       elif line.startswith('    ' * 6):
         line = line.strip()
+
         if line != '':
           current_line.append(line)
 

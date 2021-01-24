@@ -1,31 +1,34 @@
 
 import cv2
-from typing import List, Dict
-import os
-from pydub import AudioSegment
 import ffmpeg
+import os
 import random
-from textwrap import wrap
 import spacy
-from tqdm import tqdm
 import string
-from multiprocessing import Pool
 
-from script_constants import Location, Character, Action, location_map, character_map, character_location_map, \
-  audio_emotions, character_emotions, objection_emotions, shake_emotions, hold_it_emotions
+from multiprocessing import Pool
+from pydub import AudioSegment
+from textwrap import wrap
+from tqdm import tqdm
+from typing import List, Dict
 
 from animation import anim_cache, AnimScene, AnimVideo
+from script_constants import Location, Character, Action, location_map, character_map, character_location_map, \
+  audio_emotions, character_emotions, objection_emotions, shake_emotions, hold_it_emotions
 
 
 def split_str_into_newlines(text: str, max_line_count: int = 34):
   words = text.split(" ")
   new_text = ""
+
   for word in words:
     last_sentence = new_text.split("\n")[-1] + word + " "
+
     if len(last_sentence) >= max_line_count:
       new_text += "\n" + word + " "
     else:
       new_text += word + " "
+
   return new_text
 
 
@@ -38,6 +41,7 @@ def process_scene(args):
   textbox = anim_cache.get_anim_img(f"{assets_folder}/textbox4.png", w=bg.w)
 
   bench = None
+
   if scene["location"] == Location.COURTROOM_LEFT:
     bench = anim_cache.get_anim_img(f"{assets_folder}/logo-left.png")
   elif scene["location"] == Location.COURTROOM_RIGHT:
@@ -45,11 +49,14 @@ def process_scene(args):
   elif scene["location"] == Location.WITNESS_STAND:
     bench = anim_cache.get_anim_img(f"{assets_folder}/witness_stand.png", w=bg.w)
     bench.y = bg.h - bench.h
+
   if "audio" in scene:
     sound_effects.append({"_type": "bg", "src": f'{assets_folder}/{scene["audio"]}.mp3'})
+
   current_frame = 0
   current_character_name = None
   text = None
+
   for obj in scene["scene"]:
     if "character" in obj:
       _dir = f'{assets_folder}/{character_map[obj["character"]]}'
@@ -65,33 +72,41 @@ def process_scene(args):
       default_path = (
         f"{_dir}/{current_character_name.lower()}-{default}(a).gif"
       )
+
       if not os.path.isfile(default_path):
         default_path = (
           f"{_dir}/{current_character_name.lower()}-{default}.gif"
         )
+
       default_character = anim_cache.get_anim_img(default_path, half_speed=True)
+
       if "(a)" in default_path:
         talking_character = anim_cache.get_anim_img(
           default_path.replace("(a)", "(b)"), half_speed=True
         )
       else:
         talking_character = anim_cache.get_anim_img(default_path, half_speed=True)
+
     if "emotion" in obj:
       default = obj["emotion"]
       default_path = (
         f"{_dir}/{current_character_name.lower()}-{default}(a).gif"
       )
+
       if not os.path.isfile(default_path):
         default_path = (
           f"{_dir}/{current_character_name.lower()}-{default}.gif"
         )
+
       default_character = anim_cache.get_anim_img(default_path, half_speed=True)
+
       if "(a)" in default_path:
         talking_character = anim_cache.get_anim_img(
           default_path.replace("(a)", "(b)"), half_speed=True
         )
       else:
         talking_character = anim_cache.get_anim_img(default_path, half_speed=True)
+
     if "action" in obj and (
         obj["action"] == Action.TEXT
         or obj["action"] == Action.TEXT_SHAKE_EFFECT
@@ -111,6 +126,7 @@ def process_scene(args):
       )
       num_frames = len(_text) + lag_frames
       _character_name = character_name
+
       if "name" in obj:
         _character_name = anim_cache.get_anim_text(
           obj["name"],
@@ -119,21 +135,28 @@ def process_scene(args):
           x=4,
           y=113,
         )
+
       if obj["action"] == Action.TEXT_SHAKE_EFFECT:
         bg.shake_effect = True
         character.shake_effect = True
+
         if bench is not None:
           bench.shake_effect = True
+
         textbox.shake_effect = True
+
       scenes.append(
         AnimScene([bg, character, bench, textbox, _character_name, text], len(_text) - 1, start_frame=current_frame)
       )
       sound_effects.append({"_type": "bip", "length": len(_text) - 1})
+
       if obj["action"] == Action.TEXT_SHAKE_EFFECT:
         bg.shake_effect = False
         character.shake_effect = False
+
         if bench is not None:
           bench.shake_effect = False
+
         textbox.shake_effect = False
       text.typewriter_effect = False
       character = default_character
@@ -147,8 +170,10 @@ def process_scene(args):
       character = default_character
       bg.shake_effect = True
       character.shake_effect = True
+
       if bench is not None:
         bench.shake_effect = True
+
       textbox.shake_effect = True
 
       if text is not None:
@@ -163,6 +188,7 @@ def process_scene(args):
         ]
       else:
         scene_objs = [bg, character, bench]
+
       scenes.append(
         AnimScene(scene_objs, lag_frames, start_frame=current_frame)
       )
@@ -170,9 +196,12 @@ def process_scene(args):
       current_frame += lag_frames
       bg.shake_effect = False
       character.shake_effect = False
+
       if bench is not None:
         bench.shake_effect = False
+
       textbox.shake_effect = False
+
     elif "action" in obj and obj["action"] == Action.OBJECTION:
       effect_image = anim_cache.get_anim_img(f"{assets_folder}/objection.gif", shake_effect=True)
       character = default_character
@@ -187,6 +216,7 @@ def process_scene(args):
         }
       )
       current_frame += default_length
+
     elif "action" in obj and obj["action"] == Action.HOLD_IT:
       effect_image = anim_cache.get_anim_img(f"{assets_folder}/holdit.gif", shake_effect=True)
       character = default_character
@@ -200,17 +230,21 @@ def process_scene(args):
         }
       )
       current_frame += default_length
+
     else:
       character = default_character
       _length = lag_frames
+
       if "length" in obj:
         _length = obj["length"]
       if "repeat" in obj:
         character.repeat = obj["repeat"]
+
       scenes.append(AnimScene([bg, character, bench], _length, start_frame=current_frame))
       character.repeat = True
       sound_effects.append({"_type": "silence", "length": _length})
       current_frame += _length
+
   return scene_id, scenes, sound_effects
 
 
@@ -221,20 +255,23 @@ def do_video(
   default_length = 11
   scene_jobs = [(scene_id, scene, assets_folder, default_length, lag_frames) for scene_id, scene in enumerate(config)]
   results = []
+
   with Pool(processes=10) as p:
     for scene_id, scene_animations, scene_sfx in tqdm(
-        p.imap_unordered(process_scene, scene_jobs), total=len(scene_jobs), desc='creating video...'
+        p.imap_unordered(process_scene, scene_jobs), total=len(scene_jobs), desc='creating video'
     ):
       results.append((scene_id, scene_animations, scene_sfx))
 
   scenes = []
   sound_effects = []
+
   for scene_id, scene_animations, scene_sfx in sorted(results, key=lambda x: x[0]):
     scenes.extend(scene_animations)
     sound_effects.extend(scene_sfx)
 
   video = AnimVideo(scenes, fps=fps, extension=cache_video_extension, codec=cache_video_codec)
   video.render(f"{cache_folder}/video.{cache_video_extension}")
+
   return sound_effects
 
 
@@ -256,12 +293,15 @@ def do_audio(sound_effects: List[Dict], assets_folder, fps, cache_folder='cache'
   default_objection = AudioSegment.from_mp3(f"{assets_folder}/Payne - Objection.mp3")
 
   # loop through all sfx which are not music tracks and combine them into a single track
-  for obj in tqdm(sound_effects, total=len(sound_effects), desc='creating sound effects...'):
+  for obj in tqdm(sound_effects, total=len(sound_effects), desc='creating sound effects'):
     obj_type = obj["_type"]
     obj_length = 0
+
     if 'length' in obj:
       obj_length = obj["length"]
+
     obj_duration = int(obj_length * spf)
+
     if obj_type == "silence":
       audio_se += AudioSegment.silent(duration=obj_duration)
     elif obj_type == "bip":
@@ -269,6 +309,7 @@ def do_audio(sound_effects: List[Dict], assets_folder, fps, cache_folder='cache'
       audio_se += blink + long_bip[:obj_duration]
     elif obj_type == "objection":
       obj_character = obj["character"]
+
       if obj_character == "phoenix":
         audio_se += pheonix_objection[:obj_duration]
       elif obj_character == "edgeworth":
@@ -289,12 +330,13 @@ def do_audio(sound_effects: List[Dict], assets_folder, fps, cache_folder='cache'
       music_tracks.append({"src": obj["src"]})
     else:
       len_counter += obj["length"]
+
   if len(music_tracks) > 0 and len_counter > 0:
     music_tracks[-1]["length"] = len_counter
 
   music_se = AudioSegment.empty()
   # create music track based on computed lengths and combine tracks together
-  for track in tqdm(music_tracks, total=len(music_tracks), desc='creating music...'):
+  for track in tqdm(music_tracks, total=len(music_tracks), desc='creating music'):
     track_length = track["length"]
     track_duration = int(track_length * spf)
     music_se += AudioSegment.from_mp3(track["src"])[:track_duration]
@@ -326,8 +368,10 @@ def ace_attorney_animate(
   do_audio(sound_effects, assets_folder, fps)
   video = ffmpeg.input(f"{cache_folder}/video.{cache_video_extension}")
   audio = ffmpeg.input(f"{cache_folder}/audio.mp3")
+
   if os.path.exists(output_filename):
     os.remove(output_filename)
+
   out = ffmpeg.output(
     video,
     audio,
@@ -341,8 +385,10 @@ def ace_attorney_animate(
 
 def get_characters(most_common: List):
   characters = {Character.PHOENIX: most_common[0]}
+
   if len(most_common) > 0:
     characters[Character.EDGEWORTH] = most_common[1]
+
     if len(most_common) > 1:
       for character in most_common[2:]:
         rnd_characters = [
@@ -374,20 +420,23 @@ def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
   nlp = spacy.load("en_core_web_sm")
   audio_min_scene_duration = 4
   scene = []
+
   for comment in comments:
     tokens = nlp(comment.body)
     sentences = [sent.string.strip() for sent in tokens.sents]
     joined_sentences, current_sentence = [], None
+
     for sentence in sentences:
       if len(sentence) > 90:
         text_chunks = []
         text_wrap = wrap(sentence, 85)
+
         for idx, chunk in enumerate(text_wrap):
           if chunk[-1] in string.punctuation:
             chunk_text = chunk
           else:
             if idx != len(text_wrap) - 1:
-              chunk_text = f"{chunk}..."
+              chunk_text = f"{chunk}"
             else:
               chunk_text = chunk
           text_chunks.append(chunk_text)
@@ -400,16 +449,20 @@ def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
           if current_sentence is not None:
             joined_sentences.append(current_sentence)
           current_sentence = sentence
+
     if current_sentence is not None:
       joined_sentences.append(current_sentence)
+
     character_block = []
     character = comment.author.character
     emotion = comment.emotion
     emotion_score = comment.score
+
     if emotion is None or emotion_score <= emotion_threshold:
       emotion = 'normal'
 
     character_emotion = random.choice(character_emotions[character][emotion])
+
     for idx, chunk in enumerate(joined_sentences):
       character_block.append(
         {
@@ -427,10 +480,12 @@ def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
   change_audio = True
   last_emotion = None
   audio_duration = 0
+
   for character_block in scene:
     scene_objs = []
     character = character_block[0]["character"]
     emotion = character_block[0]["emotion_class"]
+
     if last_emotion is None:
       last_emotion = emotion
     if emotion in objection_emotions:
@@ -440,6 +495,7 @@ def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
           "action": Action.OBJECTION,
         }
       )
+
       if last_audio != audio_emotions['objection']:
         last_audio = audio_emotions['objection']
         change_audio = True
@@ -457,11 +513,12 @@ def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
           "action": Action.HOLD_IT,
         }
       )
+
       if last_audio != audio_emotions['holdit']:
         last_audio = audio_emotions['holdit']
         change_audio = True
     elif emotion != last_emotion \
-      and audio_duration >= audio_min_scene_duration:
+        and audio_duration >= audio_min_scene_duration:
       if last_audio != audio_emotions[emotion]:
         last_audio = audio_emotions[emotion]
         change_audio = True
@@ -486,6 +543,8 @@ def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
       formatted_scene["audio"] = last_audio
       change_audio = False
       audio_duration = 0
+
     audio_duration += 1
     formatted_scenes.append(formatted_scene)
+
   ace_attorney_animate(formatted_scenes, **kwargs)
