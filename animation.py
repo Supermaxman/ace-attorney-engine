@@ -1,10 +1,10 @@
-from PIL import Image, ImageDraw, ImageFont
-import numpy as np
 import cv2
-from typing import List, Dict
+import numpy as np
 import os
-import random as r
 import random
+
+from PIL import Image, ImageDraw, ImageFont
+from typing import List, Dict
 
 
 class AnimCache:
@@ -18,11 +18,13 @@ class AnimCache:
     key = hash(
       (font_path, font_size)
     )
+
     if key not in self._font_cache:
       f = ImageFont.truetype(font_path, font_size)
       self._font_cache[key] = f
     else:
       f = self._font_cache[key]
+
     return f
 
   def get_anim_text(self, text, x=0, y=0, font_path=None, font_size=12, typewriter_effect=False, colour="#ffffff"):
@@ -31,11 +33,13 @@ class AnimCache:
         text, x, y, font_path, font_size, typewriter_effect, colour
       )
     )
+
     if key not in self._text_cache:
       if font_path is not None:
         font = self.get_font(font_path, font_size)
       else:
         font = None
+
       a = AnimText(
         text=text,
         font=font,
@@ -47,6 +51,7 @@ class AnimCache:
       self._text_cache[key] = a
     else:
       a = self._text_cache[key]
+
     return a
 
   def get_image(self, path):
@@ -55,6 +60,7 @@ class AnimCache:
     else:
       img = Image.open(path, "r")
       self._img_cache[path] = img
+
     return img
 
   def get_anim_img(
@@ -81,6 +87,7 @@ class AnimCache:
         repeat
       )
     )
+
     if key not in self._cache:
       img = self.get_image(path)
       a = AnimImg(
@@ -95,6 +102,7 @@ class AnimCache:
       self._cache[key] = a
     else:
       a = self._cache[key]
+
     return a
 
 
@@ -123,19 +131,23 @@ class AnimImg:
     self.key_x = key_x
     self.key_x_reverse = key_x_reverse
     img = img
+
     if img.format == "GIF" and img.is_animated:
       self.frames = []
+
       for idx in range(img.n_frames):
         img.seek(idx)
         self.frames.append(self.resize(img, w=w, h=h).convert("RGBA"))
     elif key_x is not None:
       self.frames = []
+
       for x_pad in range(key_x):
         self.frames.append(
           add_margin(
             self.resize(img, w=w, h=h).convert("RGBA"), 0, 0, 0, x_pad
           )
         )
+
       if key_x_reverse:
         for x_pad in reversed(range(key_x)):
           self.frames.append(
@@ -145,6 +157,7 @@ class AnimImg:
           )
     else:
       self.frames = [self.resize(img, w=w, h=h).convert("RGBA")]
+
     self.w = self.frames[0].size[0]
     self.h = self.frames[0].size[1]
     self.shake_effect = shake_effect
@@ -163,6 +176,7 @@ class AnimImg:
         h_perc = h / float(frame.size[1])
         _w = int((float(frame.size[0]) * float(h_perc)))
         return frame.resize((_w, h), Image.ANTIALIAS)
+
     return frame
 
   def render(self, background: Image = None, frame: int = 0):
@@ -171,19 +185,26 @@ class AnimImg:
         frame = frame % len(self.frames)
       else:
         frame = len(self.frames) - 1
+
     if self.half_speed and self.repeat:
       frame = int(frame / 2)
+
     _img = self.frames[frame]
+
     if background is None:
       _w, _h = _img.size
       _background = Image.new("RGBA", (_w, _h), (255, 255, 255, 255))
     else:
       _background = background
+
     bg_w, bg_h = _background.size
     offset = (self.x, self.y)
+
     if self.shake_effect:
-      offset = (self.x + r.randint(-1, 1), self.y + r.randint(-1, 1))
+      offset = (self.x + random.randint(-1, 1), self.y + random.randint(-1, 1))
+
     _background.paste(_img, offset, mask=_img)
+
     if background is None:
       return _background
 
@@ -227,12 +248,15 @@ class AnimText:
   def render(self, background: Image, frame: int = 0):
     draw = ImageDraw.Draw(background)
     _text = self.text
+
     if self.typewriter_effect:
       _text = _text[:frame]
+
     if self.font is not None:
       draw.text((self.x, self.y), _text, font=self.font, fill=self.colour)
     else:
       draw.text((self.x, self.y), _text, fill=self.colour)
+
     return background
 
   def __str__(self):
@@ -247,16 +271,19 @@ class AnimScene:
       filter(lambda x: x is not None, arr)
     )
     #     print([str(x) for x in arr])
+
     for idx in range(start_frame, length + start_frame):
       if isinstance(arr[0], AnimImg):
         background = arr[0].render()
       else:
         background = arr[0]
+
       for obj in arr[1:]:
         if isinstance(obj, AnimText):
           obj.render(background, frame=text_idx)
         else:
           obj.render(background, frame=idx)
+
       self.frames.append(background)
       text_idx += 1
 
@@ -265,8 +292,10 @@ class AnimVideo:
   def __init__(self, scenes: List[AnimScene], fps: int = 10, extension='mp4', codec=None):
     self.scenes = scenes
     self.fps = fps
+
     if codec is None:
       codec = cv2.VideoWriter_fourcc(*'MPEG')
+
     self.codec = codec
     self.extension = extension
 
@@ -276,14 +305,20 @@ class AnimVideo:
         os.makedirs("tmp")
       rnd_hash = random.getrandbits(64)
       output_path = f"tmp/{rnd_hash}.{self.extension}"
+
     background = self.scenes[0].frames[0]
+
     if os.path.isfile(output_path):
       os.remove(output_path)
+
     video = cv2.VideoWriter(output_path, self.codec, self.fps, background.size)
+
     for scene in self.scenes:
       for frame in scene.frames:
         video.write(cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR))
+
     video.release()
+
     return output_path
 
 
@@ -293,4 +328,5 @@ def add_margin(pil_img, top, right, bottom, left):
   new_height = height + top + bottom
   result = Image.new(pil_img.mode, (new_width, new_height), (0, 0, 0, 0))
   result.paste(pil_img, (left, top))
+
   return result
