@@ -9,7 +9,7 @@ from comments import Comment, EmotionComment
 
 
 class EmotionModel(object):
-  def __init__(self, model_name, batch_size=64, max_seq_len=512, num_workers=4, force_max_seq_len=False):
+  def __init__(self, model_name, batch_size=8, max_seq_len=512, num_workers=4, force_max_seq_len=False):
     self.model_name = model_name
     self.tokenizer = AutoTokenizer.from_pretrained(model_name)
     self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
