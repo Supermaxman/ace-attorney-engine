@@ -22,11 +22,31 @@ class Author(object):
     self.character = character
 
 
+def get_emotion(text, tokenizer, model, norm):
+  input_ids = tokenizer.encode(
+    text + '</s>',
+    return_tensors='pt'
+  )
+
+  output = model.generate(
+    input_ids=input_ids,
+    max_length=2,
+    output_scores=True,
+    return_dict_in_generate=True
+  )
+  dec = [tokenizer.decode(ids) for ids in output.sequences]
+  scores = norm(output.scores[0])
+  score = float(scores.max(dim=-1)[0][0])
+  label = dec[0].replace('<pad>', '').strip()
+
+  return label, score
+
+
 if __name__ == '__main__':
   # settings
   assets_folder       = Settings.ASSETS_FOLDER
   data_path           = Settings.DATA_PATH
-  os.environ["PATH"] += Settings.FFMPEG_PATH
+  os.environ["PATH"] += ';' + Settings.FFMPEG_PATH
   model_name          = Settings.MODEL_NAME
   output_filename     = Settings.OUTPUT_FILENAME
 
@@ -34,33 +54,12 @@ if __name__ == '__main__':
   os.makedirs(os.path.dirname(output_filename), exist_ok=True)
 
   # TODO: should these be put into Settings.py
-  max_length = None
+  max_length = 10
   emotion_threshold = 0.5
 
   tokenizer = AutoTokenizer.from_pretrained(model_name)
   model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
   norm = torch.nn.Softmax(dim=-1)
-
-  # TODO: move this out of the main section
-  # TODO: don't be lazy and use the defined variables, pass them instead
-  def get_emotion(text):
-    input_ids = tokenizer.encode(
-      text + '</s>',
-      return_tensors='pt'
-    )
-
-    output = model.generate(
-      input_ids=input_ids,
-      max_length=2,
-      output_scores=True,
-      return_dict_in_generate=True
-    )
-    dec = [tokenizer.decode(ids) for ids in output.sequences]
-    scores = norm(output.scores[0])
-    score = float(scores.max(dim=-1)[0][0])
-    label = dec[0].replace('<pad>', '').strip()
-
-    return label, score
 
   characters = [
     Author(
@@ -96,7 +95,7 @@ if __name__ == '__main__':
 
         if previous_character is not None and previous_character != current_character:
           t = ' '.join(current_line)
-          emotion, score = get_emotion(t)
+          emotion, score = get_emotion(t, tokenizer, model, norm)
           comment = Comment(
             body=t,
             emotion=emotion,
