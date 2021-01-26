@@ -1,5 +1,4 @@
 
-import cv2
 import ffmpeg
 import os
 import random
@@ -11,6 +10,7 @@ from pydub import AudioSegment
 from textwrap import wrap
 from tqdm import tqdm
 from typing import List, Dict
+import numpy as np
 
 from animation import anim_cache, AnimScene, AnimVideo
 from script_constants import Location, Character, Action, location_map, character_map, character_location_map, \
@@ -36,18 +36,39 @@ def process_scene(args):
   scene_id, scene, assets_folder, default_length, lag_frames = args
   sound_effects = []
   scenes = []
-  bg = anim_cache.get_anim_img(f'{assets_folder}/{location_map[scene["location"]]}')
-  arrow = anim_cache.get_anim_img(f"{assets_folder}/arrow.png", x=235, y=170, w=15, h=15, key_x=5)
-  textbox = anim_cache.get_anim_img(f"{assets_folder}/textbox4.png", w=bg.w)
-
+  scaling_factor = 2
+  bg = anim_cache.get_anim_img(
+    f'{assets_folder}/{location_map[scene["location"]]}',
+    scaling_factor=scaling_factor
+  )
+  arrow = anim_cache.get_anim_img(
+    f"{assets_folder}/arrow.png",
+    x=235,
+    y=170,
+    w=15,
+    h=15,
+    key_x=5,
+    scaling_factor=scaling_factor
+  )
+  textbox = anim_cache.get_anim_img(
+    f"{assets_folder}/textbox4.png",
+    w=bg.w // scaling_factor,
+    scaling_factor=scaling_factor
+  )
+  name_text_font_size = 12
+  text_box_font_size = 15
+  name_text_x = 4
+  name_text_y = 113
+  text_box_x = 5
+  text_box_y = 130
   bench = None
 
   if scene["location"] == Location.COURTROOM_LEFT:
-    bench = anim_cache.get_anim_img(f"{assets_folder}/logo-left.png")
+    bench = anim_cache.get_anim_img(f"{assets_folder}/logo-left.png", scaling_factor=scaling_factor)
   elif scene["location"] == Location.COURTROOM_RIGHT:
-    bench = anim_cache.get_anim_img(f"{assets_folder}/logo-right.png")
+    bench = anim_cache.get_anim_img(f"{assets_folder}/logo-right.png", scaling_factor=scaling_factor)
   elif scene["location"] == Location.WITNESS_STAND:
-    bench = anim_cache.get_anim_img(f"{assets_folder}/witness_stand.png", w=bg.w)
+    bench = anim_cache.get_anim_img(f"{assets_folder}/witness_stand.png", w=bg.w // scaling_factor, scaling_factor=scaling_factor)
     bench.y = bg.h - bench.h
 
   if "audio" in scene:
@@ -64,9 +85,10 @@ def process_scene(args):
       character_name = anim_cache.get_anim_text(
         current_character_name,
         font_path=f"{assets_folder}/igiari/Igiari.ttf",
-        font_size=12,
-        x=4,
-        y=113,
+        font_size=name_text_font_size,
+        x=name_text_x,
+        y=name_text_y,
+        scaling_factor=scaling_factor
       )
       default = "normal" if "emotion" not in obj else obj["emotion"]
       default_path = (
@@ -78,14 +100,24 @@ def process_scene(args):
           f"{_dir}/{current_character_name.lower()}-{default}.gif"
         )
 
-      default_character = anim_cache.get_anim_img(default_path, half_speed=True)
+      default_character = anim_cache.get_anim_img(
+        default_path,
+        half_speed=True,
+        scaling_factor=scaling_factor
+      )
 
       if "(a)" in default_path:
         talking_character = anim_cache.get_anim_img(
-          default_path.replace("(a)", "(b)"), half_speed=True
+          default_path.replace("(a)", "(b)"),
+          half_speed=True,
+          scaling_factor=scaling_factor
         )
       else:
-        talking_character = anim_cache.get_anim_img(default_path, half_speed=True)
+        talking_character = anim_cache.get_anim_img(
+          default_path,
+          half_speed=True,
+          scaling_factor=scaling_factor
+        )
 
     if "emotion" in obj:
       default = obj["emotion"]
@@ -98,14 +130,24 @@ def process_scene(args):
           f"{_dir}/{current_character_name.lower()}-{default}.gif"
         )
 
-      default_character = anim_cache.get_anim_img(default_path, half_speed=True)
+      default_character = anim_cache.get_anim_img(
+        default_path,
+        half_speed=True,
+        scaling_factor=scaling_factor
+      )
 
       if "(a)" in default_path:
         talking_character = anim_cache.get_anim_img(
-          default_path.replace("(a)", "(b)"), half_speed=True
+          default_path.replace("(a)", "(b)"),
+          half_speed=True,
+          scaling_factor=scaling_factor
         )
       else:
-        talking_character = anim_cache.get_anim_img(default_path, half_speed=True)
+        talking_character = anim_cache.get_anim_img(
+          default_path,
+          half_speed=True,
+          scaling_factor=scaling_factor
+        )
 
     if "action" in obj and (
         obj["action"] == Action.TEXT
@@ -118,11 +160,12 @@ def process_scene(args):
       text = anim_cache.get_anim_text(
         _text,
         font_path=f"{assets_folder}/igiari/Igiari.ttf",
-        font_size=15,
-        x=5,
-        y=130,
+        font_size=text_box_font_size,
+        x=text_box_x,
+        y=text_box_y,
         typewriter_effect=True,
         colour=_colour,
+        scaling_factor=scaling_factor
       )
       num_frames = len(_text) + lag_frames
       _character_name = character_name
@@ -131,9 +174,10 @@ def process_scene(args):
         _character_name = anim_cache.get_anim_text(
           obj["name"],
           font_path=f"{assets_folder}/igiari/Igiari.ttf",
-          font_size=12,
-          x=4,
-          y=113,
+          font_size=name_text_font_size,
+          x=name_text_x,
+          y=name_text_y,
+          scaling_factor=scaling_factor
         )
 
       if obj["action"] == Action.TEXT_SHAKE_EFFECT:
@@ -203,7 +247,11 @@ def process_scene(args):
       textbox.shake_effect = False
 
     elif "action" in obj and obj["action"] == Action.OBJECTION:
-      effect_image = anim_cache.get_anim_img(f"{assets_folder}/objection.gif", shake_effect=True)
+      effect_image = anim_cache.get_anim_img(
+        f"{assets_folder}/objection.gif",
+        shake_effect=True,
+        scaling_factor=scaling_factor
+      )
       character = default_character
       scenes.append(AnimScene([bg, character, bench, effect_image], default_length, start_frame=current_frame))
       scenes.append(AnimScene([bg, character, bench], default_length, start_frame=current_frame))
@@ -218,7 +266,11 @@ def process_scene(args):
       current_frame += default_length
 
     elif "action" in obj and obj["action"] == Action.HOLD_IT:
-      effect_image = anim_cache.get_anim_img(f"{assets_folder}/holdit.gif", shake_effect=True)
+      effect_image = anim_cache.get_anim_img(
+        f"{assets_folder}/holdit.gif",
+        shake_effect=True,
+        scaling_factor=scaling_factor
+      )
       character = default_character
       scenes.append(AnimScene([bg, character, bench, effect_image], default_length, start_frame=current_frame))
       scenes.append(AnimScene([bg, character, bench], default_length, start_frame=current_frame))
@@ -249,8 +301,7 @@ def process_scene(args):
 
 
 def do_video(
-    config: List[Dict], assets_folder, fps, lag_frames=25,
-    cache_video_codec=None, cache_video_extension='avi', cache_folder='cache'
+    config: List[Dict], assets_folder, lag_frames=25
 ):
   default_length = 11
   scene_jobs = [(scene_id, scene, assets_folder, default_length, lag_frames) for scene_id, scene in enumerate(config)]
@@ -269,10 +320,10 @@ def do_video(
     scenes.extend(scene_animations)
     sound_effects.extend(scene_sfx)
 
-  video = AnimVideo(scenes, fps=fps, extension=cache_video_extension, codec=cache_video_codec)
-  video.render(f"{cache_folder}/video.{cache_video_extension}")
+  video = AnimVideo(scenes)
+  frames = video.render()
 
-  return sound_effects
+  return sound_effects, frames
 
 
 def do_audio(sound_effects: List[Dict], assets_folder, fps, cache_folder='cache'):
@@ -342,7 +393,9 @@ def do_audio(sound_effects: List[Dict], assets_folder, fps, cache_folder='cache'
     music_se += AudioSegment.from_mp3(track["src"])[:track_duration]
 
   final_se = audio_se.overlay(music_se)
-  final_se.export(f"{cache_folder}/audio.mp3", format="mp3")
+  audio_path = f"{cache_folder}/audio.mp3"
+  final_se.export(audio_path, format="mp3")
+  return audio_path
 
 
 def ace_attorney_animate(
@@ -352,35 +405,42 @@ def ace_attorney_animate(
     fps=18,
     video_codec='libx264',
     audio_codec='aac',
-    cache_video_codec=cv2.VideoWriter_fourcc(*'MPEG'),
-    cache_video_extension='avi',
     cache_folder='cache'
 ):
   if not os.path.exists(cache_folder):
     os.mkdir(cache_folder)
 
-  sound_effects = do_video(
-    config, assets_folder, fps,
-    cache_video_codec=cache_video_codec,
-    cache_video_extension=cache_video_extension,
-    cache_folder=cache_folder,
+  sound_effects, frames = do_video(
+    config, assets_folder
   )
-  do_audio(sound_effects, assets_folder, fps)
-  video = ffmpeg.input(f"{cache_folder}/video.{cache_video_extension}")
-  audio = ffmpeg.input(f"{cache_folder}/audio.mp3")
 
-  if os.path.exists(output_filename):
-    os.remove(output_filename)
+  audio_path = do_audio(sound_effects, assets_folder, fps)
 
-  out = ffmpeg.output(
-    video,
-    audio,
-    output_filename,
-    vcodec=video_codec,
-    acodec=audio_codec,
-    strict="experimental",
+  n, height, width, channels = frames.shape
+
+  video_input = ffmpeg.input('pipe:', format='rawvideo', pix_fmt='rgb24', s=f'{width}x{height}', r=fps)
+  audio_input = ffmpeg.input(audio_path)
+
+  process = (
+    ffmpeg.output(
+      video_input,
+      audio_input,
+      output_filename,
+      pix_fmt='yuv420p',
+      vcodec=video_codec,
+      r=fps,
+      acodec=audio_codec,
+      video_bitrate=4000 * 1000000
+    )
+    .overwrite_output()
+    .run_async(pipe_stdin=True)
   )
-  out.run(capture_stdout=True, capture_stderr=True)
+  for frame in frames:
+    process.stdin.write(
+      frame.astype(np.uint8).tobytes()
+    )
+  process.stdin.close()
+  process.wait()
 
 
 def get_characters(most_common: List):
@@ -419,6 +479,7 @@ def get_characters(most_common: List):
 def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
   nlp = spacy.load("en_core_web_sm")
   audio_min_scene_duration = 4
+  wrap_threshold = 80
   scene = []
 
   for comment in comments:
@@ -427,9 +488,9 @@ def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
     joined_sentences, current_sentence = [], None
 
     for sentence in sentences:
-      if len(sentence) > 90:
+      if len(sentence) > wrap_threshold:
         text_chunks = []
-        text_wrap = wrap(sentence, 85)
+        text_wrap = wrap(sentence, wrap_threshold)
 
         for idx, chunk in enumerate(text_wrap):
           if chunk[-1] in string.punctuation:
