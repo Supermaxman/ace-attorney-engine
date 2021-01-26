@@ -17,18 +17,11 @@ from script_constants import Location, Character, Action, location_map, characte
   audio_emotions, character_emotions, objection_emotions, shake_emotions, hold_it_emotions
 
 
-def split_str_into_newlines(text: str, max_line_count: int = 34):
-  words = text.split(" ")
-  new_text = ""
-
-  for word in words:
-    last_sentence = new_text.split("\n")[-1] + word + " "
-
-    if len(last_sentence) >= max_line_count:
-      new_text += "\n" + word + " "
-    else:
-      new_text += word + " "
-
+def split_str_into_newlines(text: str, max_line_count):
+  lines = []
+  for line in wrap(text, max_line_count):
+    lines.append(line)
+  new_text = '\n'.join(lines)
   return new_text
 
 
@@ -55,12 +48,13 @@ def process_scene(args):
     w=bg.w // scaling_factor,
     scaling_factor=scaling_factor
   )
-  name_text_font_size = 12
-  text_box_font_size = 15
+  name_text_font_size = 10
   name_text_x = 4
-  name_text_y = 113
+  name_text_y = 115
+  text_box_font_size = 15
   text_box_x = 5
   text_box_y = 130
+  text_box_max_line_count = 35
   bench = None
 
   if scene["location"] == Location.COURTROOM_LEFT:
@@ -155,7 +149,7 @@ def process_scene(args):
     ):
       # TODO speed this up, too slow
       character = talking_character
-      _text = split_str_into_newlines(obj["text"])
+      _text = split_str_into_newlines(obj["text"], text_box_max_line_count)
       _colour = None if "colour" not in obj else obj["colour"]
       text = anim_cache.get_anim_text(
         _text,
@@ -479,7 +473,7 @@ def get_characters(most_common: List):
 def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
   nlp = spacy.load("en_core_web_sm")
   audio_min_scene_duration = 4
-  wrap_threshold = 80
+  wrap_threshold = 3 * 35
   scene = []
 
   for comment in comments:
@@ -493,18 +487,15 @@ def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
         text_wrap = wrap(sentence, wrap_threshold)
 
         for idx, chunk in enumerate(text_wrap):
-          if chunk[-1] in string.punctuation:
-            chunk_text = chunk
+          if idx != len(text_wrap) - 1 and chunk[-1] not in string.punctuation:
+            chunk_text = f"{chunk}..."
           else:
-            if idx != len(text_wrap) - 1:
-              chunk_text = f"{chunk}"
-            else:
-              chunk_text = chunk
+            chunk_text = chunk
           text_chunks.append(chunk_text)
         joined_sentences.extend(text_chunks)
         current_sentence = None
       else:
-        if current_sentence is not None and len(current_sentence) + len(sentence) + 1 <= 90:
+        if current_sentence is not None and len(current_sentence) + len(sentence) + 1 <= wrap_threshold:
           current_sentence += " " + sentence
         else:
           if current_sentence is not None:

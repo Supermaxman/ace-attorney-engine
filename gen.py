@@ -54,7 +54,7 @@ if __name__ == '__main__':
   os.makedirs(os.path.dirname(output_filename), exist_ok=True)
 
   # TODO: should these be put into Settings.py
-  max_length = 10
+  max_length = 20
   emotion_threshold = 0.5
 
   tokenizer = AutoTokenizer.from_pretrained(model_name)
