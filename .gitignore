@@ -7,9 +7,6 @@ output/
 
 # ignore the db
 db.json
-assets/*
-cache/*
-output/*
 assets/
 cache/
 resources/
