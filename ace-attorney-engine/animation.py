@@ -1,13 +1,12 @@
 
 import numpy as np
-import os
 import random
 
 from PIL import Image, ImageDraw, ImageFont
 from typing import List, Dict
 
 
-class AnimCache:
+class AnimationCache:
   def __init__(self):
     self._cache = {}
     self._img_cache = {}
@@ -46,7 +45,7 @@ class AnimCache:
       else:
         font = None
 
-      a = AnimText(
+      a = AnimationText(
         text=text,
         font=font,
         x=int(scaling_factor*x),
@@ -98,7 +97,7 @@ class AnimCache:
 
     if key not in self._cache:
       img = self.get_image(path)
-      a = AnimImg(
+      a = AnimationImage(
         path,
         img,
         x=x, y=y, w=w, h=h,
@@ -115,10 +114,10 @@ class AnimCache:
     return a
 
 
-anim_cache = AnimCache()
+animation_cache = AnimationCache()
 
 
-class AnimImg:
+class AnimationImage:
   def __init__(
     self,
     path: str,
@@ -247,7 +246,7 @@ class AnimImg:
     )
 
 
-class AnimText:
+class AnimationText:
   def __init__(
     self,
     text: str,
@@ -310,7 +309,7 @@ class AnimText:
     return self.text
 
 
-class AnimScene:
+class AnimationScene:
   def __init__(self, arr: List, length: int, start_frame: int = 0):
     self.frames = []
     text_idx = 0
@@ -320,13 +319,13 @@ class AnimScene:
     #     print([str(x) for x in arr])
 
     for idx in range(start_frame, length + start_frame):
-      if isinstance(arr[0], AnimImg):
+      if isinstance(arr[0], AnimationImage):
         background = arr[0].render()
       else:
         background = arr[0]
 
       for obj in arr[1:]:
-        if isinstance(obj, AnimText):
+        if isinstance(obj, AnimationText):
           obj.render(background, frame=text_idx)
         else:
           obj.render(background, frame=idx)
@@ -335,8 +334,8 @@ class AnimScene:
       text_idx += 1
 
 
-class AnimVideo:
-  def __init__(self, scenes: List[AnimScene]):
+class AnimationVideo:
+  def __init__(self, scenes: List[AnimationScene]):
     self.scenes = scenes
 
   def render(self):
