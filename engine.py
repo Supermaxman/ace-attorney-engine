@@ -54,7 +54,7 @@ def process_scene(args):
   text_box_font_size = 15
   text_box_x = 5
   text_box_y = 130
-  text_box_max_line_count = 35
+  text_box_max_line_count = 32
   bench = None
 
   if scene["location"] == Location.COURTROOM_LEFT:
@@ -473,7 +473,8 @@ def get_characters(most_common: List):
 def comments_to_scene(comments: List, emotion_threshold=0.5, **kwargs):
   nlp = spacy.load("en_core_web_sm")
   audio_min_scene_duration = 4
-  wrap_threshold = 3 * 35
+  # 30 chars per line, 3 lines, but we must subtract 3 for the final potential "..."
+  wrap_threshold = (3 * 30) - 3
   scene = []
 
   for comment in comments:
