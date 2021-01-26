@@ -2,6 +2,7 @@
 import numpy as np
 import random
 
+import ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 from typing import List, Dict
 
@@ -332,22 +333,6 @@ class AnimationScene:
 
       self.frames.append(background)
       text_idx += 1
-
-
-class AnimationVideo:
-  def __init__(self, scenes: List[AnimationScene]):
-    self.scenes = scenes
-
-  def render(self):
-    frames = []
-    for scene in self.scenes:
-      for frame in scene.frames:
-        frame_array = np.array(frame)
-        # remove alpha channel
-        frames.append(frame_array[:, :, :3])
-
-    frames = np.array(frames)
-    return frames
 
 
 def add_margin(pil_img, top, right, bottom, left):

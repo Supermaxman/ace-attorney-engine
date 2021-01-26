@@ -11,7 +11,7 @@ from pydub import AudioSegment
 from tqdm import tqdm
 import numpy as np
 
-from animation import animation_cache, AnimationScene, AnimationVideo
+from animation import animation_cache, AnimationScene
 
 from script_constants import Location, Character, Action, location_map, character_map, character_location_map, \
   audio_emotions, character_emotions, objection_emotions, shake_emotions, hold_it_emotions
@@ -24,20 +24,20 @@ from comments import Comment, EmotionComment, Author
 class PhoenixEngine(object):
   def __init__(
     self,
-    theme,
-    emotion_model,
-    sentence_model,
-    emotion_threshold,
-    music_min_scene_duration,
-    fps,
-    video_codec,
-    audio_codec,
-    video_bitrate,
-    lag_frames,
-    num_processes,
-    scaling_factor,
-    assets_folder,
-    cache_folder,
+    theme='classic',
+    emotion_model='mrm8488/t5-base-finetuned-emotion',
+    sentence_model='en_core_web_sm',
+    emotion_threshold=0.5,
+    music_min_scene_duration=4,
+    fps=18,
+    video_codec='libx264',
+    audio_codec='aac',
+    video_crf=23,
+    lag_frames=25,
+    default_animation_length=11,
+    scaling_factor=2.0,
+    assets_folder='./assets',
+    cache_folder='./cache',
   ):
     self.theme = theme
     self.emotion_model = emotion_model
@@ -47,13 +47,11 @@ class PhoenixEngine(object):
     self.fps = fps
     self.video_codec = video_codec
     self.audio_codec = audio_codec
-    self.video_bitrate = video_bitrate
+    self.video_crf = video_crf
     self.lag_frames = lag_frames
-    self.num_processes = num_processes
     self.scaling_factor = scaling_factor
     self.assets_folder = os.path.join(assets_folder, self.theme)
     self.cache_folder = cache_folder
-
     # mrm8488/t5-base-finetuned-emotion
     self.emo = EmotionModel(
       self.emotion_model
@@ -64,8 +62,7 @@ class PhoenixEngine(object):
       sentence_model
     )
 
-    # TODO this may be a config?
-    self.default_animation_length = 11
+    self.default_animation_length = default_animation_length
 
   def animate(
     self,
@@ -81,23 +78,15 @@ class PhoenixEngine(object):
     if not os.path.exists(self.cache_folder):
       os.mkdir(self.cache_folder)
 
-    sound_effects, frames = self._animate_video(
+    sound_effects, video_path = self._render_video(
       scene_config
     )
 
-    audio_path = self._animate_audio(
+    audio_path = self._render_audio(
       sound_effects
     )
 
-    n, height, width, channels = frames.shape
-
-    video_input = ffmpeg.input(
-      'pipe:',
-      format='rawvideo',
-      pix_fmt='rgb24',
-      s=f'{width}x{height}',
-      r=self.fps
-    )
+    video_input = ffmpeg.input(video_path)
     audio_input = ffmpeg.input(audio_path)
 
     process = (
@@ -109,16 +98,11 @@ class PhoenixEngine(object):
         vcodec=self.video_codec,
         r=self.fps,
         acodec=self.audio_codec,
-        video_bitrate=self.video_bitrate
+        crf=self.video_crf
       )
         .overwrite_output()
         .run_async(pipe_stdin=True)
     )
-    for frame in frames:
-      process.stdin.write(
-        frame.astype(np.uint8).tobytes()
-      )
-    process.stdin.close()
     process.wait()
 
   def _configure_scene(self, comments: List[EmotionComment]):
@@ -250,20 +234,46 @@ class PhoenixEngine(object):
       formatted_scenes.append(formatted_scene)
     return formatted_scenes
 
-  def _animate_video(self, scene_configs):
-    scenes = []
+  def _render_video(self, scene_configs):
+    video_path = f"{self.cache_folder}/video.mp4"
     sound_effects = []
-    for scene in tqdm(scene_configs, desc='creating video', total=len(scene_configs)):
-      scene_animations, scene_sfx = self._process_scene(scene)
-      scenes.extend(scene_animations)
+    process = None
+    for scene_config in tqdm(scene_configs, desc='creating video', total=len(scene_configs)):
+      scenes, scene_sfx = self._process_scene(scene_config)
+      for scene in scenes:
+        for frame in scene.frames:
+          frame_array = np.array(frame)[:, :, :3]
+          if process is None:
+            height, width, channels = frame_array.shape
+            video_input = ffmpeg.input(
+              'pipe:',
+              format='rawvideo',
+              pix_fmt='rgb24',
+              s=f'{width}x{height}',
+              r=self.fps
+            )
+            process = (
+              ffmpeg.output(
+                video_input,
+                video_path,
+                pix_fmt='yuv420p',
+                vcodec=self.video_codec,
+                r=self.fps,
+                crf=self.video_crf
+              )
+                .overwrite_output()
+                .run_async(pipe_stdin=True)
+            )
+          process.stdin.write(
+            frame_array.astype(np.uint8).tobytes()
+          )
       sound_effects.extend(scene_sfx)
+    process.stdin.close()
+    process.wait()
 
-    video = AnimationVideo(scenes)
-    frames = video.render()
+    return sound_effects, video_path
 
-    return sound_effects, frames
-
-  def _animate_audio(self, sound_effects: List[Dict]):
+  def _render_audio(self, sound_effects: List[Dict]):
     audio_se = AudioSegment.empty()
     bip = AudioSegment.from_wav(
       f"{self.assets_folder}/sfx general/sfx-blipmale.wav"

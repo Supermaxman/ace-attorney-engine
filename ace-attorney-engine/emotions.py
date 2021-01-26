@@ -52,7 +52,7 @@ class EmotionModel(object):
     emotions = []
     scores = []
     with torch.no_grad():
-      for batch in tqdm(data_loader, total=len(data_loader), desc='running emotion detection...'):
+      for batch in tqdm(data_loader, total=len(data_loader), desc='running emotion detection:'):
         output = self.model.generate(
           input_ids=batch['input_ids'],
           attention_mask=batch['attention_mask'],

@@ -21,7 +21,7 @@ class Settings:
   FPS                       = int(os.getenv('FPS') or 18)
   VIDEO_CODEC               = os.getenv('VIDEO_CODEC') or 'libx264'
   AUDIO_CODEC               = os.getenv('AUDIO_CODEC') or 'aac'
-  VIDEO_BITRATE             = int(os.getenv('VIDEO_BITRATE') or 4000 * 1000000)
+  VIDEO_CRF                 = int(os.getenv('VIDEO_CRF') or 19)
   LAG_FRAMES                = int(os.getenv('LAG_FRAMES') or 25)
-  NUM_PROCESSES             = int(os.getenv('NUM_PROCESSES') or 10)
+  DEFAULT_ANIMATION_LENGTH  = int(os.getenv('DEFAULT_ANIMATION_LENGTH') or 11)
   SCALING_FACTOR            = float(os.getenv('SCALING_FACTOR') or 2.0)
