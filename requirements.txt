@@ -1,10 +1,11 @@
+ffmpeg-python
 numpy
 Pillow
-opencv-python
+protobuf
 pydub
-ffmpeg-python
+python-dotenv
+sentencepiece
 spacy
 transformers
 tqdm
 torch
-sentencepiece
