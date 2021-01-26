@@ -1,4 +1,4 @@
-import cv2
+
 import numpy as np
 import os
 import random
@@ -14,37 +14,43 @@ class AnimCache:
     self._text_cache = {}
     self._font_cache = {}
 
-  def get_font(self, font_path, font_size):
+  def get_font(self, font_path, font_size, scaling_factor):
     key = hash(
-      (font_path, font_size)
+      (font_path, font_size, scaling_factor)
     )
 
     if key not in self._font_cache:
-      f = ImageFont.truetype(font_path, font_size)
+      f = ImageFont.truetype(
+        font_path,
+        int(scaling_factor * font_size)
+      )
       self._font_cache[key] = f
     else:
       f = self._font_cache[key]
 
     return f
 
-  def get_anim_text(self, text, x=0, y=0, font_path=None, font_size=12, typewriter_effect=False, colour="#ffffff"):
+  def get_anim_text(
+    self, text, x=0, y=0, font_path=None, font_size=12, typewriter_effect=False, colour="#ffffff",
+    scaling_factor=1.0
+  ):
     key = hash(
       (
-        text, x, y, font_path, font_size, typewriter_effect, colour
+        text, x, y, font_path, font_size, typewriter_effect, colour, scaling_factor
       )
     )
 
     if key not in self._text_cache:
       if font_path is not None:
-        font = self.get_font(font_path, font_size)
+        font = self.get_font(font_path, font_size, scaling_factor)
       else:
         font = None
 
       a = AnimText(
         text=text,
         font=font,
-        x=x,
-        y=y,
+        x=int(scaling_factor*x),
+        y=int(scaling_factor*y),
         typewriter_effect=typewriter_effect,
         colour=colour
       )
@@ -76,6 +82,7 @@ class AnimCache:
     shake_effect: bool = False,
     half_speed: bool = False,
     repeat: bool = True,
+    scaling_factor: int = 1.0,
   ):
     key = hash(
       (
@@ -84,7 +91,8 @@ class AnimCache:
         key_x_reverse,
         shake_effect,
         half_speed,
-        repeat
+        repeat,
+        scaling_factor
       )
     )
 
@@ -97,7 +105,8 @@ class AnimCache:
         key_x=key_x, key_x_reverse=key_x_reverse,
         shake_effect=shake_effect,
         half_speed=half_speed,
-        repeat=repeat
+        repeat=repeat,
+        scaling_factor=scaling_factor
       )
       self._cache[key] = a
     else:
@@ -124,9 +133,11 @@ class AnimImg:
     shake_effect: bool = False,
     half_speed: bool = False,
     repeat: bool = True,
+    scaling_factor: int = 1.0,
   ):
-    self.x = x
-    self.y = y
+    self.scaling_factor = scaling_factor
+    self.x = int(self.scaling_factor * x)
+    self.y = int(self.scaling_factor * y)
     self.path = path
     self.key_x = key_x
     self.key_x_reverse = key_x_reverse
@@ -134,11 +145,16 @@ class AnimImg:
 
     if img.format == "GIF" and img.is_animated:
       self.frames = []
-
       for idx in range(img.n_frames):
         img.seek(idx)
+        w = img.size[0]
+        h = img.size[1]
         self.frames.append(self.resize(img, w=w, h=h).convert("RGBA"))
     elif key_x is not None:
+      if w is None and h is None:
+        w = img.size[0]
+        h = img.size[1]
+
       self.frames = []
 
       for x_pad in range(key_x):
@@ -156,6 +172,10 @@ class AnimImg:
             )
           )
     else:
+      if w is None and h is None:
+        # frame = img.convert("RGBA")
+        w = img.size[0]
+        h = img.size[1]
       self.frames = [self.resize(img, w=w, h=h).convert("RGBA")]
 
     self.w = self.frames[0].size[0]
@@ -166,16 +186,16 @@ class AnimImg:
 
   def resize(self, frame, *, w: int = None, h: int = None):
     if w is not None and h is not None:
-      return frame.resize((w, h))
+      return frame.resize((int(self.scaling_factor * w), int(self.scaling_factor * h)))
     else:
       if w is not None:
         w_perc = w / float(frame.size[0])
         _h = int((float(frame.size[1]) * float(w_perc)))
-        return frame.resize((w, _h), Image.ANTIALIAS)
+        return frame.resize((int(self.scaling_factor * w), int(self.scaling_factor * _h)), Image.ANTIALIAS)
       if h is not None:
         h_perc = h / float(frame.size[1])
         _w = int((float(frame.size[0]) * float(h_perc)))
-        return frame.resize((_w, h), Image.ANTIALIAS)
+        return frame.resize((int(self.scaling_factor * _w), int(self.scaling_factor * h)), Image.ANTIALIAS)
 
     return frame
 
@@ -222,7 +242,7 @@ class AnimImg:
         self.key_x_reverse,
         self.shake_effect,
         self.half_speed,
-        self.repeat
+        self.repeat, self.scaling_factor
       )
     )
 
@@ -252,10 +272,37 @@ class AnimText:
     if self.typewriter_effect:
       _text = _text[:frame]
 
+    # TODO play with fonts to get cripser
+    # fill = None,
+    # font = None,
+    # anchor = None,
+    # spacing = 4,
+    # align = "left",
+    # direction = None,
+    # features = None,
+    # language = None,
+    # stroke_width = 0,
+    # stroke_fill = None,
+
     if self.font is not None:
-      draw.text((self.x, self.y), _text, font=self.font, fill=self.colour)
+      draw.text(
+        (self.x, self.y),
+        _text,
+        font=self.font,
+        fill=self.colour,
+        spacing=4,
+        stroke_width=0,
+        stroke_fill=0
+      )
     else:
-      draw.text((self.x, self.y), _text, fill=self.colour)
+      draw.text(
+        (self.x, self.y),
+        _text,
+        fill=self.colour,
+        spacing=4,
+        stroke_width=0,
+        stroke_fill=0
+      )
 
     return background
 
@@ -289,37 +336,19 @@ class AnimScene:
 
 
 class AnimVideo:
-  def __init__(self, scenes: List[AnimScene], fps: int = 10, extension='mp4', codec=None):
+  def __init__(self, scenes: List[AnimScene]):
     self.scenes = scenes
-    self.fps = fps
 
-    if codec is None:
-      codec = cv2.VideoWriter_fourcc(*'MPEG')
-
-    self.codec = codec
-    self.extension = extension
-
-  def render(self, output_path: str = None):
-    if output_path is None:
-      if not os.path.exists("tmp"):
-        os.makedirs("tmp")
-      rnd_hash = random.getrandbits(64)
-      output_path = f"tmp/{rnd_hash}.{self.extension}"
-
-    background = self.scenes[0].frames[0]
-
-    if os.path.isfile(output_path):
-      os.remove(output_path)
-
-    video = cv2.VideoWriter(output_path, self.codec, self.fps, background.size)
-
+  def render(self):
+    frames = []
     for scene in self.scenes:
       for frame in scene.frames:
-        video.write(cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR))
+        frame_array = np.array(frame)
+        # remove alpha channel
+        frames.append(frame_array[:, :, :3])
 
-    video.release()
-
-    return output_path
+    frames = np.array(frames)
+    return frames
 
 
 def add_margin(pil_img, top, right, bottom, left):

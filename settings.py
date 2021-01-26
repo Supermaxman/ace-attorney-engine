@@ -11,4 +11,3 @@ class Settings:
   FFMPEG_PATH     = os.getenv('FFMPEG_PATH')
   MODEL_NAME      = os.getenv('MODEL_NAME')
   OUTPUT_FILENAME = os.getenv('OUTPUT_FILENAME') or './out/out.mp4'
-  
