@@ -1,18 +1,20 @@
 
-import numpy as np
 import random
 
-import ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 from typing import List, Dict
 
 
 class AnimationCache:
   def __init__(self):
-    self._cache = {}
+    # self._cache = {}
     self._img_cache = {}
-    self._text_cache = {}
+    # self._text_cache = {}
     self._font_cache = {}
+
+  def clear(self):
+    self._img_cache.clear()
+    self._font_cache.clear()
 
   def get_font(self, font_path, font_size, scaling_factor):
     key = hash(
@@ -34,30 +36,19 @@ class AnimationCache:
     self, text, x=0, y=0, font_path=None, font_size=12, typewriter_effect=False, colour="#ffffff",
     scaling_factor=1.0
   ):
-    key = hash(
-      (
-        text, x, y, font_path, font_size, typewriter_effect, colour, scaling_factor
-      )
-    )
-
-    if key not in self._text_cache:
-      if font_path is not None:
-        font = self.get_font(font_path, font_size, scaling_factor)
-      else:
-        font = None
-
-      a = AnimationText(
-        text=text,
-        font=font,
-        x=int(scaling_factor*x),
-        y=int(scaling_factor*y),
-        typewriter_effect=typewriter_effect,
-        colour=colour
-      )
-      self._text_cache[key] = a
+    if font_path is not None:
+      font = self.get_font(font_path, font_size, scaling_factor)
     else:
-      a = self._text_cache[key]
+      font = None
 
+    a = AnimationText(
+      text=text,
+      font=font,
+      x=int(scaling_factor*x),
+      y=int(scaling_factor*y),
+      typewriter_effect=typewriter_effect,
+      colour=colour
+    )
     return a
 
   def get_image(self, path):
@@ -84,33 +75,17 @@ class AnimationCache:
     repeat: bool = True,
     scaling_factor: int = 1.0,
   ):
-    key = hash(
-      (
-        path, x, y, w, h,
-        key_x,
-        key_x_reverse,
-        shake_effect,
-        half_speed,
-        repeat,
-        scaling_factor
-      )
+    img = self.get_image(path)
+    a = AnimationImage(
+      path,
+      img,
+      x=x, y=y, w=w, h=h,
+      key_x=key_x, key_x_reverse=key_x_reverse,
+      shake_effect=shake_effect,
+      half_speed=half_speed,
+      repeat=repeat,
+      scaling_factor=scaling_factor
     )
-
-    if key not in self._cache:
-      img = self.get_image(path)
-      a = AnimationImage(
-        path,
-        img,
-        x=x, y=y, w=w, h=h,
-        key_x=key_x, key_x_reverse=key_x_reverse,
-        shake_effect=shake_effect,
-        half_speed=half_speed,
-        repeat=repeat,
-        scaling_factor=scaling_factor
-      )
-      self._cache[key] = a
-    else:
-      a = self._cache[key]
 
     return a
 
@@ -310,7 +285,7 @@ class AnimationText:
     return self.text
 
 
-class AnimationScene:
+class SceneAnimation:
   def __init__(self, arr: List, length: int, start_frame: int = 0):
     self.frames = []
     text_idx = 0
@@ -319,7 +294,7 @@ class AnimationScene:
     )
     #     print([str(x) for x in arr])
 
-    for idx in range(start_frame, length + start_frame):
+    for idx in range(start_frame, start_frame + length):
       if isinstance(arr[0], AnimationImage):
         background = arr[0].render()
       else:

@@ -11,7 +11,7 @@ from pydub import AudioSegment
 from tqdm import tqdm
 import numpy as np
 
-from animation import animation_cache, AnimationScene
+from animation import animation_cache, SceneAnimation
 
 from script_constants import Location, Character, Action, location_map, character_map, character_location_map, \
   audio_emotions, character_emotions, objection_emotions, shake_emotions, hold_it_emotions
@@ -49,6 +49,7 @@ class PhoenixEngine(object):
     self.audio_codec = audio_codec
     self.video_crf = video_crf
     self.lag_frames = lag_frames
+    self.default_animation_length = default_animation_length
     self.scaling_factor = scaling_factor
     self.assets_folder = os.path.join(assets_folder, self.theme)
     self.cache_folder = cache_folder
@@ -61,8 +62,6 @@ class PhoenixEngine(object):
     self.nlp = spacy.load(
       sentence_model
     )
-
-    self.default_animation_length = default_animation_length
 
   def animate(
     self,
@@ -235,13 +234,13 @@ class PhoenixEngine(object):
     return formatted_scenes
 
   def _render_video(self, scene_configs):
-    video_path = f"{self.cache_folder}/video.mp4"
+    video_path = os.path.join(self.cache_folder, 'video.mp4')
     sound_effects = []
     process = None
     for scene_config in tqdm(scene_configs, desc='creating video', total=len(scene_configs)):
-      scenes, scene_sfx = self._process_scene(scene_config)
-      for scene in scenes:
-        for frame in scene.frames:
+      scene_animations, scene_sfx = self._process_scene(scene_config)
+      for animation in scene_animations:
+        for frame in animation.frames:
           frame_array = np.array(frame)[:, :, :3]
           if process is None:
             height, width, channels = frame_array.shape
@@ -270,6 +269,8 @@ class PhoenixEngine(object):
       sound_effects.extend(scene_sfx)
     process.stdin.close()
     process.wait()
+
+    animation_cache.clear()
 
     return sound_effects, video_path
 
@@ -340,13 +341,13 @@ class PhoenixEngine(object):
       music_se += AudioSegment.from_mp3(track["src"])[:track_duration]
 
     final_se = audio_se.overlay(music_se)
-    audio_path = f"{self.cache_folder}/audio.mp3"
+    audio_path = os.path.join(self.cache_folder, 'audio.mp3')
     final_se.export(audio_path, format="mp3")
     return audio_path
 
   def _process_scene(self, scene):
     sound_effects = []
-    scenes = []
+    scene_animations = []
     bg = animation_cache.get_anim_img(
       f'{self.assets_folder}/{location_map[scene["location"]]}',
       scaling_factor=self.scaling_factor
@@ -474,7 +475,6 @@ class PhoenixEngine(object):
         obj["action"] == Action.TEXT
         or obj["action"] == Action.TEXT_SHAKE_EFFECT
       ):
-        # TODO speed this up, too slow
         character = talking_character
         _text = split_str_into_newlines(obj["text"], text_box_max_line_count)
         _colour = None if "colour" not in obj else obj["colour"]
@@ -510,9 +510,12 @@ class PhoenixEngine(object):
 
           textbox.shake_effect = True
 
-        scenes.append(
-          AnimationScene([bg, character, bench, textbox, _character_name, text], len(_text) - 1,
-                         start_frame=current_frame)
+        scene_animations.append(
+          SceneAnimation(
+            [bg, character, bench, textbox, _character_name, text],
+            length=len(_text) - 1,
+            start_frame=current_frame
+          )
         )
         sound_effects.append({"_type": "bip", "length": len(_text) - 1})
 
@@ -526,9 +529,12 @@ class PhoenixEngine(object):
           textbox.shake_effect = False
         text.typewriter_effect = False
         character = default_character
-        scenes.append(
-          AnimationScene([bg, character, bench, textbox, _character_name, text, arrow], self.lag_frames,
-                         start_frame=len(_text) - 1)
+        scene_animations.append(
+          SceneAnimation(
+            [bg, character, bench, textbox, _character_name, text, arrow],
+            length=self.lag_frames,
+            start_frame=len(_text) - 1
+          )
         )
         current_frame += num_frames
         sound_effects.append({"_type": "silence", "length": self.lag_frames})
@@ -556,8 +562,12 @@ class PhoenixEngine(object):
         else:
           scene_objs = [bg, character, bench]
 
-        scenes.append(
-          AnimationScene(scene_objs, self.lag_frames, start_frame=current_frame)
+        scene_animations.append(
+          SceneAnimation(
+            scene_objs,
+            length=self.lag_frames,
+            start_frame=current_frame
+          )
         )
         sound_effects.append({"_type": "shock", "length": self.lag_frames})
         current_frame += self.lag_frames
@@ -576,17 +586,17 @@ class PhoenixEngine(object):
           scaling_factor=self.scaling_factor
         )
         character = default_character
-        scenes.append(
-          AnimationScene(
+        scene_animations.append(
+          SceneAnimation(
             [bg, character, bench, effect_image],
-            self.default_animation_length,
+            length=self.default_animation_length,
             start_frame=current_frame
           )
         )
-        scenes.append(
-          AnimationScene(
+        scene_animations.append(
+          SceneAnimation(
             [bg, character, bench],
-            self.default_animation_length,
+            length=self.default_animation_length,
             start_frame=current_frame
           )
         )
@@ -607,17 +617,17 @@ class PhoenixEngine(object):
           scaling_factor=self.scaling_factor
         )
         character = default_character
-        scenes.append(
-          AnimationScene(
+        scene_animations.append(
+          SceneAnimation(
             [bg, character, bench, effect_image],
-            self.default_animation_length,
+            length=self.default_animation_length,
             start_frame=current_frame
           )
         )
-        scenes.append(
-          AnimationScene(
+        scene_animations.append(
+          SceneAnimation(
             [bg, character, bench],
-            self.default_animation_length,
+            length=self.default_animation_length,
             start_frame=current_frame
           )
         )
@@ -639,12 +649,18 @@ class PhoenixEngine(object):
         if "repeat" in obj:
           character.repeat = obj["repeat"]
 
-        scenes.append(AnimationScene([bg, character, bench], _length, start_frame=current_frame))
+        scene_animations.append(
+          SceneAnimation(
+            [bg, character, bench],
+            length=_length,
+            start_frame=current_frame
+          )
+        )
         character.repeat = True
         sound_effects.append({"_type": "silence", "length": _length})
         current_frame += _length
 
-    return scenes, sound_effects
+    return scene_animations, sound_effects
 
   def get_characters(self, most_common: List):
     # this may be based on theme in the future, don't make static
@@ -683,6 +699,6 @@ class PhoenixEngine(object):
 def split_str_into_newlines(text: str, max_line_count):
   lines = []
   for line in wrap(text, max_line_count):
-    lines.append(line)
+    lines.append(line + ' ')
   new_text = '\n'.join(lines)
   return new_text
