@@ -160,17 +160,36 @@ class AnimationImage:
     self.repeat = repeat
 
   def resize(self, frame, *, w: int = None, h: int = None):
+    upscale_method = Image.ANTIALIAS
     if w is not None and h is not None:
-      return frame.resize((int(self.scaling_factor * w), int(self.scaling_factor * h)))
+      return frame.resize(
+        (
+          int(self.scaling_factor * w),
+          int(self.scaling_factor * h)
+        ),
+        upscale_method
+      )
     else:
       if w is not None:
         w_perc = w / float(frame.size[0])
         _h = int((float(frame.size[1]) * float(w_perc)))
-        return frame.resize((int(self.scaling_factor * w), int(self.scaling_factor * _h)), Image.ANTIALIAS)
+        return frame.resize(
+          (
+            int(self.scaling_factor * w),
+            int(self.scaling_factor * _h)
+          ),
+          upscale_method
+        )
       if h is not None:
         h_perc = h / float(frame.size[1])
         _w = int((float(frame.size[0]) * float(h_perc)))
-        return frame.resize((int(self.scaling_factor * _w), int(self.scaling_factor * h)), Image.ANTIALIAS)
+        return frame.resize(
+          (
+            int(self.scaling_factor * _w),
+            int(self.scaling_factor * h)
+          ),
+          upscale_method
+        )
 
     return frame
 
@@ -196,7 +215,10 @@ class AnimationImage:
     offset = (self.x, self.y)
 
     if self.shake_effect:
-      offset = (self.x + random.randint(-1, 1), self.y + random.randint(-1, 1))
+      offset = (
+        self.x + int(random.randint(-1, 1) * self.scaling_factor),
+        self.y + int(random.randint(-1, 1) * self.scaling_factor)
+      )
 
     _background.paste(_img, offset, mask=_img)
 
