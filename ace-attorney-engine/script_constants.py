@@ -89,16 +89,16 @@ character_location_map = {
 # anger
 # fear
 # surprise
-objection_emotions = {
-  'anger'
+
+action_emotions = {
+  Action.OBJECTION: {'anger'},
+  Action.SHAKE_EFFECT: {'joy'},
+  Action.HOLD_IT: {'surprise'},
 }
 
-shake_emotions = {
-  'joy'
-}
-
-hold_it_emotions = {
-  'surprise'
+action_music = {
+  Action.OBJECTION: '08 - Pressing Pursuit _ Cornered',
+  Action.HOLD_IT: '11 - Pressing Pursuit _ Cornered , Variation',
 }
 
 character_emotions = {
@@ -274,8 +274,6 @@ character_emotions = {
 
 audio_emotions = {
   "normal": "03 - Turnabout Courtroom - Trial",
-  "objection": "08 - Pressing Pursuit _ Cornered",
-  "holdit": "11 - Pressing Pursuit _ Cornered , Variation",
   "sadness": "10 - Suspense",
   "joy": "03 - Turnabout Courtroom - Trial",
   "love": "05 - Logic and Trick",
@@ -283,3 +281,4 @@ audio_emotions = {
   "fear": "10 - Suspense",
   "surprise": "05 - Logic and Trick",
 }
+

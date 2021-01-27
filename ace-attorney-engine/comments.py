@@ -1,12 +1,12 @@
 
 
-class Comment(object):
+class Comment:
   def __init__(self, body, author):
     self.body = body
     self.author = author
 
 
-class EmotionComment(object):
+class EmotionComment:
   def __init__(self, body, author, emotion=None, score=0.0):
     self.body = body
     self.author = author
@@ -14,7 +14,7 @@ class EmotionComment(object):
     self.score = score
 
 
-class Author(object):
+class Author:
   def __init__(self, name, character):
     self.name = name
     self.character = character

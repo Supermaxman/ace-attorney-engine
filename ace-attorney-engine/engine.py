@@ -14,14 +14,17 @@ import numpy as np
 from animation import animation_cache, SceneAnimation
 
 from script_constants import Location, Character, Action, location_map, character_map, character_location_map, \
-  audio_emotions, character_emotions, objection_emotions, shake_emotions, hold_it_emotions
+  audio_emotions, character_emotions, \
+  action_music, action_emotions
 
 from emotions import EmotionModel
+
+from scenes import CharacterBeat, CharacterCue, CharacterShot, SoundEffect, MusicEffect
 
 from comments import Comment, EmotionComment, Author
 
 
-class PhoenixEngine(object):
+class PhoenixEngine:
   def __init__(
     self,
     theme='classic',
@@ -62,6 +65,8 @@ class PhoenixEngine(object):
     self.nlp = spacy.load(
       sentence_model
     )
+    # TODO make parameter?
+    self.wrap_threshold = (3 * 30) - 3
 
   def animate(
     self,
@@ -72,17 +77,17 @@ class PhoenixEngine(object):
 
     emotion_comments = self.emo.detect_emotions(comments)
 
-    scene_config = self._configure_scene(emotion_comments)
+    shot = self._create_shot(emotion_comments)
 
     if not os.path.exists(self.cache_folder):
       os.mkdir(self.cache_folder)
 
-    sound_effects, video_path = self._render_video(
-      scene_config
+    video_path = self._render_video(
+      shot
     )
 
     audio_path = self._render_audio(
-      sound_effects
+      shot
     )
 
     video_input = ffmpeg.input(video_path)
@@ -104,142 +109,125 @@ class PhoenixEngine(object):
     )
     process.wait()
 
-  def _configure_scene(self, comments: List[EmotionComment]):
-    # 30 chars per line, 3 lines, but we must subtract 3 for the final potential "..."
-    wrap_threshold = (3 * 30) - 3
-    scene = []
+  def _parse_comment(self, comment: EmotionComment):
+    tokens = self.nlp(comment.body)
+    sentences = [sent.string.strip() for sent in tokens.sents]
+    joined_sentences, current_sentence = [], None
+
+    for sentence in sentences:
+      if len(sentence) > self.wrap_threshold:
+        text_chunks = []
+        text_wrap = wrap(sentence, self.wrap_threshold)
+
+        for idx, chunk in enumerate(text_wrap):
+          if idx != len(text_wrap) - 1 and chunk[-1] not in string.punctuation:
+            chunk_text = f"{chunk}..."
+          else:
+            chunk_text = chunk
+          text_chunks.append(chunk_text)
+        joined_sentences.extend(text_chunks)
+        current_sentence = None
+      else:
+        if current_sentence is not None and len(current_sentence) + len(sentence) + 1 <= self.wrap_threshold:
+          current_sentence += " " + sentence
+        else:
+          if current_sentence is not None:
+            joined_sentences.append(current_sentence)
+          current_sentence = sentence
+
+    if current_sentence is not None:
+      joined_sentences.append(current_sentence)
+    return joined_sentences
+
+  def _parse_shot(self, comments: List[EmotionComment]) -> CharacterShot:
+    character_cues = []
 
     for comment in comments:
-      tokens = self.nlp(comment.body)
-      sentences = [sent.string.strip() for sent in tokens.sents]
-      joined_sentences, current_sentence = [], None
-
-      for sentence in sentences:
-        if len(sentence) > wrap_threshold:
-          text_chunks = []
-          text_wrap = wrap(sentence, wrap_threshold)
-
-          for idx, chunk in enumerate(text_wrap):
-            if idx != len(text_wrap) - 1 and chunk[-1] not in string.punctuation:
-              chunk_text = f"{chunk}..."
-            else:
-              chunk_text = chunk
-            text_chunks.append(chunk_text)
-          joined_sentences.extend(text_chunks)
-          current_sentence = None
-        else:
-          if current_sentence is not None and len(current_sentence) + len(sentence) + 1 <= wrap_threshold:
-            current_sentence += " " + sentence
-          else:
-            if current_sentence is not None:
-              joined_sentences.append(current_sentence)
-            current_sentence = sentence
-
-      if current_sentence is not None:
-        joined_sentences.append(current_sentence)
-
-      character_block = []
+      text_blocks = self._parse_comment(comment)
       character = comment.author.character
       emotion = comment.emotion
       emotion_score = comment.score
-
       if emotion is None or emotion_score <= self.emotion_threshold:
         emotion = 'normal'
+      # TODO based on emotion_score ?
+      character_emotion = random.choice(
+        character_emotions[character][emotion]
+      )
 
-      character_emotion = random.choice(character_emotions[character][emotion])
-
-      for idx, chunk in enumerate(joined_sentences):
-        character_block.append(
-          {
-            "character": character,
-            "name": comment.author.name,
-            "text": chunk,
-            "emotion": character_emotion,
-            "emotion_class": emotion,
-            "emotion_class_score": emotion_score
-          }
+      character_beats = []
+      for idx, text_block in enumerate(text_blocks):
+        character_beat = CharacterBeat(
+          text=text_block,
         )
-      scene.append(character_block)
-    formatted_scenes = []
+        character_beats.append(
+          character_beat
+        )
+      character_cue = CharacterCue(
+        character=character,
+        name=comment.author.name,
+        beats=character_beats,
+        location=character_location_map[character],
+        emotion=character_emotion,
+        emotion_class=emotion,
+        emotion_class_score=emotion_score
+      )
+
+      character_cues.append(character_cue)
+    character_shot = CharacterShot(
+      cues=character_cues
+    )
+    return character_shot
+
+  def _create_shot(self, comments: List[EmotionComment]):
+    # 30 chars per line, 3 lines, but we must subtract 3 for the final potential "..."
+    character_shot = self._parse_shot(comments)
     last_audio = audio_emotions['normal']
-    change_audio = True
+    current_audio = last_audio
     last_emotion = None
     audio_duration = 0
-
-    for character_block in scene:
-      scene_objs = []
-      character = character_block[0]["character"]
-      emotion = character_block[0]["emotion_class"]
-
+    for character_cue in character_shot.cues:
       if last_emotion is None:
-        last_emotion = emotion
-      if emotion in objection_emotions:
-        scene_objs.append(
-          {
-            "character": character,
-            "action": Action.OBJECTION,
-          }
+        last_emotion = character_cue.emotion_class
+        character_cue.music = MusicEffect(
+          track=last_audio
         )
+      changed_music = False
+      for action, emotions_set in action_emotions.items():
+        if character_cue.emotion_class in emotions_set:
+          character_cue.actions.append(action)
+          if action in action_music:
+            current_audio = action_music[action]
+            if current_audio != last_audio:
+              character_cue.music = MusicEffect(
+                track=current_audio
+              )
+              changed_music = True
+          break
+      # TODO don't like this very much, work on better music cues
+      if not changed_music \
+          and character_cue.emotion_class != last_emotion \
+              and audio_duration >= self.music_min_scene_duration:
+        current_audio = audio_emotions[character_cue.emotion_class]
+        if last_audio != current_audio:
+          character_cue.music = MusicEffect(
+              track=current_audio
+            )
+          last_emotion = character_cue.emotion_class
+          changed_music = True
 
-        if last_audio != audio_emotions['objection']:
-          last_audio = audio_emotions['objection']
-          change_audio = True
-      elif emotion in shake_emotions:
-        scene_objs.append(
-          {
-            "character": character,
-            "action": Action.SHAKE_EFFECT,
-          }
-        )
-      elif emotion in hold_it_emotions:
-        scene_objs.append(
-          {
-            "character": character,
-            "action": Action.HOLD_IT,
-          }
-        )
-
-        if last_audio != audio_emotions['holdit']:
-          last_audio = audio_emotions['holdit']
-          change_audio = True
-      elif emotion != last_emotion \
-        and audio_duration >= self.music_min_scene_duration:
-        if last_audio != audio_emotions[emotion]:
-          last_audio = audio_emotions[emotion]
-          change_audio = True
-          last_emotion = emotion
-
-      for obj in character_block:
-        scene_objs.append(
-          {
-            "character": obj["character"],
-            "action": Action.TEXT,
-            "emotion": obj["emotion"],
-            "text": obj["text"],
-            "name": obj["name"],
-          }
-        )
-      formatted_scene = {
-        "location": character_location_map[character],
-        "scene": scene_objs,
-      }
-
-      if change_audio:
-        formatted_scene["audio"] = last_audio
-        change_audio = False
+      if changed_music:
         audio_duration = 0
+        last_audio = current_audio
 
       audio_duration += 1
-      formatted_scenes.append(formatted_scene)
-    return formatted_scenes
 
-  def _render_video(self, scene_configs):
+    return character_shot
+
+  def _render_video(self, shot: CharacterShot):
     video_path = os.path.join(self.cache_folder, 'video.mp4')
-    sound_effects = []
     process = None
-    for scene_config in tqdm(scene_configs, desc='creating video', total=len(scene_configs)):
-      scene_animations, scene_sfx = self._process_scene(scene_config)
-      for animation in scene_animations:
+    for cue in tqdm(shot.cues, desc='creating video', total=len(shot.cues)):
+      for animation in self._animate_cue(cue):
         for frame in animation.frames:
           frame_array = np.array(frame)[:, :, :3]
           if process is None:
@@ -266,90 +254,96 @@ class PhoenixEngine(object):
           process.stdin.write(
             frame_array.astype(np.uint8).tobytes()
           )
-      sound_effects.extend(scene_sfx)
     process.stdin.close()
     process.wait()
 
     animation_cache.clear()
 
-    return sound_effects, video_path
+    return video_path
 
-  def _render_audio(self, sound_effects: List[Dict]):
-    audio_se = AudioSegment.empty()
+  def _render_audio(self, shot: CharacterShot):
     bip = AudioSegment.from_wav(
       f"{self.assets_folder}/sfx general/sfx-blipmale.wav"
     ) + AudioSegment.silent(duration=50)
-    blink = AudioSegment.from_wav(f"{self.assets_folder}/sfx general/sfx-blink.wav")
+    blink = AudioSegment.from_wav(
+      f"{self.assets_folder}/sfx general/sfx-blink.wav"
+    )
     blink -= 10
-    badum = AudioSegment.from_wav(f"{self.assets_folder}/sfx general/sfx-fwashing.wav")
+    badum = AudioSegment.from_wav(
+      f"{self.assets_folder}/sfx general/sfx-fwashing.wav"
+    )
     long_bip = bip * 100
     long_bip -= 10
     spf = 1 / self.fps * 1000
-    pheonix_objection = AudioSegment.from_mp3(f"{self.assets_folder}/Phoenix - objection.mp3")
+    pheonix_objection = AudioSegment.from_mp3(
+      f"{self.assets_folder}/Phoenix - objection.mp3"
+    )
     edgeworth_objection = AudioSegment.from_mp3(
       f"{self.assets_folder}/Edgeworth - (English) objection.mp3"
     )
-    default_objection = AudioSegment.from_mp3(f"{self.assets_folder}/Payne - Objection.mp3")
+    default_objection = AudioSegment.from_mp3(
+      f"{self.assets_folder}/Payne - Objection.mp3"
+    )
 
     # loop through all sfx which are not music tracks and combine them into a single track
-    for obj in tqdm(sound_effects, total=len(sound_effects), desc='creating sound effects'):
-      obj_type = obj["_type"]
-      obj_length = 0
+    # for obj in tqdm(sound_effects, total=len(sound_effects), desc='creating sound effects'):
 
-      if 'length' in obj:
-        obj_length = obj["length"]
-
-      obj_duration = int(obj_length * spf)
-
-      if obj_type == "silence":
-        audio_se += AudioSegment.silent(duration=obj_duration)
-      elif obj_type == "bip":
-        obj_duration -= len(blink)
-        audio_se += blink + long_bip[:obj_duration]
-      elif obj_type == "objection":
-        obj_character = obj["character"]
-
+    def get_sfx_audio(se):
+      se_duration = int(se.length * spf)
+      if se.type == "silence":
+        se_audio = AudioSegment.silent(duration=se_duration)
+      elif se.type == "bip":
+        se_duration -= len(blink)
+        se_audio = blink + long_bip[:se_duration]
+      elif se.type == "objection":
+        obj_character = se.character
         if obj_character == "phoenix":
-          audio_se += pheonix_objection[:obj_duration]
+          se_audio = pheonix_objection[:se_duration]
         elif obj_character == "edgeworth":
-          audio_se += edgeworth_objection[:obj_duration]
+          se_audio = edgeworth_objection[:se_duration]
         else:
-          audio_se += default_objection[:obj_duration]
-      elif obj_type == "shock":
-        audio_se += badum[:obj_duration]
-
-    music_tracks = []
-    len_counter = 0
-    # loop through all music tracks and determine their length based on sound effects between them
-    for obj in sound_effects:
-      if obj["_type"] == "bg":
-        if len(music_tracks) > 0:
-          music_tracks[-1]["length"] = len_counter
-          len_counter = 0
-        music_tracks.append({"src": obj["src"]})
+          se_audio = default_objection[:se_duration]
+      elif se.type == "shock":
+        se_audio = badum[:se_duration]
       else:
-        len_counter += obj["length"]
+        raise ValueError(f'Unknown sound effect type: {se.type}')
+      return se_audio
 
-    if len(music_tracks) > 0 and len_counter > 0:
-      music_tracks[-1]["length"] = len_counter
+    sfx_audio = AudioSegment.empty()
+    music_audio = AudioSegment.empty()
+    music_tracks = []
+    # loop through all music tracks and determine their length based on sound effects between them
+    for cue in tqdm(shot.cues, total=len(shot.cues), desc='creating sound effects:'):
+      cue_length = 0
+      for sound_effect in cue.sfx:
+        cue_length += sound_effect.length
+        sfx_audio += get_sfx_audio(sound_effect)
+      for beat in cue.beats:
+        for sound_effect in beat.sfx:
+          cue_length += sound_effect.length
+          sfx_audio += get_sfx_audio(sound_effect)
+      if cue.music is not None:
+        music_tracks.append(
+          cue.music
+        )
+      if len(music_tracks) > 0:
+        music_tracks[-1].length += cue_length
 
-    music_se = AudioSegment.empty()
     # create music track based on computed lengths and combine tracks together
-    for track in tqdm(music_tracks, total=len(music_tracks), desc='creating music'):
-      track_length = track["length"]
+    for music_effect in tqdm(music_tracks, total=len(music_tracks), desc='creating music'):
+      track_length = music_effect.length
       track_duration = int(track_length * spf)
-      music_se += AudioSegment.from_mp3(track["src"])[:track_duration]
+      track_path = f'{self.assets_folder}/{music_effect.track}.mp3'
+      music_audio += AudioSegment.from_mp3(track_path)[:track_duration]
 
-    final_se = audio_se.overlay(music_se)
+    final_se = sfx_audio.overlay(music_audio)
     audio_path = os.path.join(self.cache_folder, 'audio.mp3')
     final_se.export(audio_path, format="mp3")
     return audio_path
 
-  def _process_scene(self, scene):
-    sound_effects = []
-    scene_animations = []
+  def _animate_cue(self, cue: CharacterCue):
     bg = animation_cache.get_anim_img(
-      f'{self.assets_folder}/{location_map[scene["location"]]}',
+      f'{self.assets_folder}/{location_map[cue.location]}',
       scaling_factor=self.scaling_factor
     )
     arrow = animation_cache.get_anim_img(
@@ -375,17 +369,17 @@ class PhoenixEngine(object):
     text_box_max_line_count = 32
     bench = None
 
-    if scene["location"] == Location.COURTROOM_LEFT:
+    if cue.location == Location.COURTROOM_LEFT:
       bench = animation_cache.get_anim_img(
         f"{self.assets_folder}/logo-left.png",
         scaling_factor=self.scaling_factor
       )
-    elif scene["location"] == Location.COURTROOM_RIGHT:
+    elif cue.location == Location.COURTROOM_RIGHT:
       bench = animation_cache.get_anim_img(
         f"{self.assets_folder}/logo-right.png",
         scaling_factor=self.scaling_factor
       )
-    elif scene["location"] == Location.WITNESS_STAND:
+    elif cue.location == Location.WITNESS_STAND:
       bench = animation_cache.get_anim_img(
         f"{self.assets_folder}/witness_stand.png",
         w=bg.w // self.scaling_factor,
@@ -393,274 +387,223 @@ class PhoenixEngine(object):
       )
       bench.y = bg.h - bench.h
 
-    if "audio" in scene:
-      sound_effects.append({"_type": "bg", "src": f'{self.assets_folder}/{scene["audio"]}.mp3'})
+    character_path = f'{self.assets_folder}/{character_map[cue.character]}'
+    current_character_name = str(cue.character)
+
+    character_emotion_path = (
+      f"{character_path}/{current_character_name.lower()}-{cue.emotion}(a).gif"
+    )
+
+    if not os.path.isfile(character_emotion_path):
+      character_emotion_path = (
+        f"{character_path}/{current_character_name.lower()}-{cue.emotion}.gif"
+      )
+
+    default_character = animation_cache.get_anim_img(
+      character_emotion_path,
+      half_speed=True,
+      scaling_factor=self.scaling_factor
+    )
+
+    if "(a)" in character_emotion_path:
+      character_emotion_path = character_emotion_path.replace("(a)", "(b)")
+
+    talking_character = animation_cache.get_anim_img(
+      character_emotion_path,
+      half_speed=True,
+      scaling_factor=self.scaling_factor
+    )
+
+    character_name = animation_cache.get_anim_text(
+      cue.name,
+      font_path=f"{self.assets_folder}/igiari/Igiari.ttf",
+      font_size=name_text_font_size,
+      x=name_text_x,
+      y=name_text_y,
+      scaling_factor=self.scaling_factor
+    )
 
     current_frame = 0
-    current_character_name = None
-    text = None
 
-    for obj in scene["scene"]:
-      if "character" in obj:
-        _dir = f'{self.assets_folder}/{character_map[obj["character"]]}'
-        current_character_name = str(obj["character"])
-        character_name = animation_cache.get_anim_text(
-          current_character_name,
-          font_path=f"{self.assets_folder}/igiari/Igiari.ttf",
-          font_size=name_text_font_size,
-          x=name_text_x,
-          y=name_text_y,
-          scaling_factor=self.scaling_factor
-        )
-        default = "normal" if "emotion" not in obj else obj["emotion"]
-        default_path = (
-          f"{_dir}/{current_character_name.lower()}-{default}(a).gif"
-        )
-
-        if not os.path.isfile(default_path):
-          default_path = (
-            f"{_dir}/{current_character_name.lower()}-{default}.gif"
-          )
-
-        default_character = animation_cache.get_anim_img(
-          default_path,
-          half_speed=True,
-          scaling_factor=self.scaling_factor
-        )
-
-        if "(a)" in default_path:
-          talking_character = animation_cache.get_anim_img(
-            default_path.replace("(a)", "(b)"),
-            half_speed=True,
-            scaling_factor=self.scaling_factor
-          )
-        else:
-          talking_character = animation_cache.get_anim_img(
-            default_path,
-            half_speed=True,
-            scaling_factor=self.scaling_factor
-          )
-
-      if "emotion" in obj:
-        default = obj["emotion"]
-        default_path = (
-          f"{_dir}/{current_character_name.lower()}-{default}(a).gif"
-        )
-
-        if not os.path.isfile(default_path):
-          default_path = (
-            f"{_dir}/{current_character_name.lower()}-{default}.gif"
-          )
-
-        default_character = animation_cache.get_anim_img(
-          default_path,
-          half_speed=True,
-          scaling_factor=self.scaling_factor
-        )
-
-        if "(a)" in default_path:
-          talking_character = animation_cache.get_anim_img(
-            default_path.replace("(a)", "(b)"),
-            half_speed=True,
-            scaling_factor=self.scaling_factor
-          )
-        else:
-          talking_character = animation_cache.get_anim_img(
-            default_path,
-            half_speed=True,
-            scaling_factor=self.scaling_factor
-          )
-
-      if "action" in obj and (
-        obj["action"] == Action.TEXT
-        or obj["action"] == Action.TEXT_SHAKE_EFFECT
-      ):
-        character = talking_character
-        _text = split_str_into_newlines(obj["text"], text_box_max_line_count)
-        _colour = None if "colour" not in obj else obj["colour"]
-        text = animation_cache.get_anim_text(
-          _text,
-          font_path=f"{self.assets_folder}/igiari/Igiari.ttf",
-          font_size=text_box_font_size,
-          x=text_box_x,
-          y=text_box_y,
-          typewriter_effect=True,
-          colour=_colour,
-          scaling_factor=self.scaling_factor
-        )
-        num_frames = len(_text) + self.lag_frames
-        _character_name = character_name
-
-        if "name" in obj:
-          _character_name = animation_cache.get_anim_text(
-            obj["name"],
-            font_path=f"{self.assets_folder}/igiari/Igiari.ttf",
-            font_size=name_text_font_size,
-            x=name_text_x,
-            y=name_text_y,
-            scaling_factor=self.scaling_factor
-          )
-
-        if obj["action"] == Action.TEXT_SHAKE_EFFECT:
-          bg.shake_effect = True
-          character.shake_effect = True
-
-          if bench is not None:
-            bench.shake_effect = True
-
-          textbox.shake_effect = True
-
-        scene_animations.append(
-          SceneAnimation(
-            [bg, character, bench, textbox, _character_name, text],
-            length=len(_text) - 1,
-            start_frame=current_frame
-          )
-        )
-        sound_effects.append({"_type": "bip", "length": len(_text) - 1})
-
-        if obj["action"] == Action.TEXT_SHAKE_EFFECT:
-          bg.shake_effect = False
-          character.shake_effect = False
-
-          if bench is not None:
-            bench.shake_effect = False
-
-          textbox.shake_effect = False
-        text.typewriter_effect = False
-        character = default_character
-        scene_animations.append(
-          SceneAnimation(
-            [bg, character, bench, textbox, _character_name, text, arrow],
-            length=self.lag_frames,
-            start_frame=len(_text) - 1
-          )
-        )
-        current_frame += num_frames
-        sound_effects.append({"_type": "silence", "length": self.lag_frames})
-
-      elif "action" in obj and obj["action"] == Action.SHAKE_EFFECT:
-        character = default_character
+    for action in cue.actions:
+      if action == Action.SHAKE_EFFECT:
         bg.shake_effect = True
-        character.shake_effect = True
+        default_character.shake_effect = True
 
         if bench is not None:
           bench.shake_effect = True
 
         textbox.shake_effect = True
 
-        if text is not None:
-          scene_objs = [
-            bg,
-            character,
-            bench,
-            textbox,
-            character_name,
-            text,
-            arrow,
-          ]
-        else:
-          scene_objs = [bg, character, bench]
-
-        scene_animations.append(
+        yield (
           SceneAnimation(
-            scene_objs,
+            [bg, default_character, bench],
             length=self.lag_frames,
             start_frame=current_frame
           )
         )
-        sound_effects.append({"_type": "shock", "length": self.lag_frames})
+        cue.sfx.append(
+          SoundEffect(
+            type='shock',
+            length=self.lag_frames
+          )
+        )
+
         current_frame += self.lag_frames
         bg.shake_effect = False
-        character.shake_effect = False
+        default_character.shake_effect = False
 
         if bench is not None:
           bench.shake_effect = False
 
         textbox.shake_effect = False
-
-      elif "action" in obj and obj["action"] == Action.OBJECTION:
+      elif action == Action.OBJECTION:
         effect_image = animation_cache.get_anim_img(
           f"{self.assets_folder}/objection.gif",
           shake_effect=True,
           scaling_factor=self.scaling_factor
         )
-        character = default_character
-        scene_animations.append(
+        yield (
           SceneAnimation(
-            [bg, character, bench, effect_image],
+            [bg, default_character, bench, effect_image],
             length=self.default_animation_length,
             start_frame=current_frame
           )
         )
-        scene_animations.append(
+        yield (
           SceneAnimation(
-            [bg, character, bench],
+            [bg, default_character, bench],
             length=self.default_animation_length,
             start_frame=current_frame
           )
         )
-
-        sound_effects.append(
-          {
-            "_type": "objection",
-            "character": current_character_name.lower(),
-            "length": 2 * self.default_animation_length,
-          }
+        cue.sfx.append(
+          SoundEffect(
+            type='objection',
+            length=2 * self.default_animation_length,
+            character=current_character_name.lower()
+          )
         )
         current_frame += self.default_animation_length
-
-      elif "action" in obj and obj["action"] == Action.HOLD_IT:
+      elif action == Action.HOLD_IT:
         effect_image = animation_cache.get_anim_img(
           f"{self.assets_folder}/holdit.gif",
           shake_effect=True,
           scaling_factor=self.scaling_factor
         )
         character = default_character
-        scene_animations.append(
+        yield (
           SceneAnimation(
             [bg, character, bench, effect_image],
             length=self.default_animation_length,
             start_frame=current_frame
           )
         )
-        scene_animations.append(
+        yield (
           SceneAnimation(
             [bg, character, bench],
             length=self.default_animation_length,
             start_frame=current_frame
           )
         )
-        sound_effects.append(
-          {
-            "_type": "objection",
-            "character": current_character_name.lower(),
-            "length": 2 * self.default_animation_length,
-          }
-        )
-        current_frame += self.default_animation_length
-
-      else:
-        character = default_character
-        _length = self.lag_frames
-
-        if "length" in obj:
-          _length = obj["length"]
-        if "repeat" in obj:
-          character.repeat = obj["repeat"]
-
-        scene_animations.append(
-          SceneAnimation(
-            [bg, character, bench],
-            length=_length,
-            start_frame=current_frame
+        cue.sfx.append(
+          SoundEffect(
+            type='objection',
+            length=2 * self.default_animation_length,
+            character=current_character_name.lower(),
           )
         )
-        character.repeat = True
-        sound_effects.append({"_type": "silence", "length": _length})
-        current_frame += _length
 
-    return scene_animations, sound_effects
+        current_frame += self.default_animation_length
+
+    for beat in cue.beats:
+      _text = split_str_into_newlines(beat.text, text_box_max_line_count)
+      _colour = None
+
+      text = animation_cache.get_anim_text(
+        _text,
+        font_path=f"{self.assets_folder}/igiari/Igiari.ttf",
+        font_size=text_box_font_size,
+        x=text_box_x,
+        y=text_box_y,
+        typewriter_effect=True,
+        colour=_colour,
+        scaling_factor=self.scaling_factor
+      )
+      num_frames = len(_text) + self.lag_frames
+
+      # if obj["action"] == Action.TEXT_SHAKE_EFFECT:
+      #   bg.shake_effect = True
+      #   character.shake_effect = True
+      #
+      #   if bench is not None:
+      #     bench.shake_effect = True
+      #
+      #   textbox.shake_effect = True
+
+      yield (
+        SceneAnimation(
+          [bg, talking_character, bench, textbox, character_name, text],
+          length=len(_text) - 1,
+          start_frame=current_frame
+        )
+      )
+      beat.sfx.append(
+        SoundEffect(
+          type='bip',
+          length=len(_text) - 1
+        )
+      )
+
+      # if obj["action"] == Action.TEXT_SHAKE_EFFECT:
+      #   bg.shake_effect = False
+      #   character.shake_effect = False
+      #
+      #   if bench is not None:
+      #     bench.shake_effect = False
+      #
+      #   textbox.shake_effect = False
+
+      text.typewriter_effect = False
+      yield (
+        SceneAnimation(
+          [bg, default_character, bench, textbox, character_name, text, arrow],
+          length=self.lag_frames,
+          start_frame=len(_text) - 1
+        )
+      )
+
+      current_frame += num_frames
+      beat.sfx.append(
+        SoundEffect(
+          type='silence',
+          length=self.lag_frames
+        )
+      )
+
+      # length = self.lag_frames
+      #
+      # if "length" in obj:
+      #   length = obj["length"]
+      # if "repeat" in obj:
+      #   default_character.repeat = obj["repeat"]
+      #
+      # yield (
+      #   SceneAnimation(
+      #     [bg, default_character, bench],
+      #     length=length,
+      #     start_frame=current_frame
+      #   )
+      # )
+      # default_character.repeat = True
+      #
+      # beat.sfx.append(
+      #   SoundEffect(
+      #     type='silence',
+      #     length=length
+      #   )
+      # )
+      # current_frame += length
 
   def get_characters(self, most_common: List):
     # this may be based on theme in the future, don't make static
