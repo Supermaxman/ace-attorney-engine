@@ -90,6 +90,14 @@ class ClassicTheme(Theme):
       return str(self.name).capitalize()
 
   def __init__(self, assets_folder, scaling_factor):
+
+    self.assets_folder = os.path.join(assets_folder, self.theme)
+    self.default_animation_length = 11
+    self.lag_frames = 25
+    self.text_box_max_line_count = 32
+    self.fps = 18
+    self.scaling_factor = scaling_factor
+
     actions = [
       Action(
         length=self.default_animation_length,
@@ -392,12 +400,6 @@ class ClassicTheme(Theme):
       locations=locations,
       characters=characters
     )
-    self.assets_folder = os.path.join(assets_folder, self.theme)
-    self.default_animation_length = 11
-    self.lag_frames = 25
-    self.text_box_max_line_count = 32
-    self.fps = 18
-    self.scaling_factor = scaling_factor
 
     self.arrow = animation_cache.get_anim_img(
       os.path.join(self.assets_folder, 'arrow.png'),
