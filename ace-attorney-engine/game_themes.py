@@ -1,18 +1,65 @@
-
+import abc
 import os
+from abc import abstractmethod
 from enum import IntEnum
 from typing import List, Dict
 from textwrap import wrap
-from dataclasses import dataclass
+
 from pydub import AudioSegment
 
 from scenes import Action, SoundEffect, MusicEffect, Character, Location, CharacterCue, CharacterSoundEffect, \
-  CharacterBeat
+  CharacterBeat, CueMusicEffect
 
 from animation import animation_cache, SceneAnimation
 
 
-class ClassicTheme:
+class Theme(abc.ABC):
+  def __init__(self, actions: List[Action], emotion_music: Dict[str, MusicEffect], locations, characters):
+    self.actions = actions
+    self.emotion_music = emotion_music
+    self.locations = locations
+    self.characters = characters
+    self.emotion_actions = {}
+    for action in self.actions:
+      for emotion in action.emotion_triggers:
+        if emotion in self.emotion_actions:
+          print('WARNING: overlapping emotion action triggers!')
+        self.emotion_actions[emotion] = action
+
+  @abstractmethod
+  def get_sfx_audio(self, se: SoundEffect):
+    pass
+
+  @abstractmethod
+  def get_character_sfx_audio(self, character_se: CharacterSoundEffect):
+    pass
+
+  @abstractmethod
+  def get_music_audio(self, cue_music_effect: CueMusicEffect):
+    pass
+
+  @abstractmethod
+  def animate_cue(self, cue: CharacterCue):
+    pass
+
+  @abstractmethod
+  def animate_action(self, cue: CharacterCue, action: Action, current_frame: int, location_images: List):
+    pass
+
+  @abstractmethod
+  def animate_beat(
+    self,
+    cue: CharacterCue,
+    beat: CharacterBeat,
+    current_frame: int,
+    location_images: List,
+    talking_images: List,
+    text_images: List
+  ):
+    pass
+
+
+class ClassicTheme(Theme):
   theme = 'classic'
 
   class Location(IntEnum):
@@ -23,15 +70,27 @@ class ClassicTheme:
     JUDGE_STAND = 5
     COURT_HOUSE = 6
 
-  def __init__(self, assets_folder, scaling_factor):
-    self.assets_folder = os.path.join(assets_folder, self.theme)
-    self.default_animation_length = 11
-    self.lag_frames = 25
-    self.text_box_max_line_count = 32
-    self.fps = 18
-    self.scaling_factor = scaling_factor
+  class Character(IntEnum):
+    PHOENIX = 1
+    EDGEWORTH = 2
+    GODOT = 3
+    FRANZISKA = 4
+    JUDGE = 5
+    LARRY = 6
+    MAYA = 7
+    KARMA = 8
+    PAYNE = 9
+    MAGGEY = 10
+    PEARL = 11
+    LOTTA = 12
+    GUMSHOE = 13
+    GROSSBERG = 14
 
-    self.actions = [
+    def __str__(self):
+      return str(self.name).capitalize()
+
+  def __init__(self, assets_folder, scaling_factor):
+    actions = [
       Action(
         length=self.default_animation_length,
         asset_name='objection.gif',
@@ -68,20 +127,13 @@ class ClassicTheme:
       ),
     ]
 
-    self.emotion_actions = {}
-    for action in self.actions:
-      for emotion in action.emotion_triggers:
-        if emotion in self.emotion_actions:
-          print('WARNING: overlapping emotion action triggers!')
-        self.emotion_actions[emotion] = action
-
     # sadness
     # joy
     # love
     # anger
     # fear
     # surprise
-    self.emotion_music = {
+    emotion_music = {
       "normal": MusicEffect(
         track="03 - Turnabout Courtroom - Trial",
       ),
@@ -105,7 +157,7 @@ class ClassicTheme:
       ),
     }
 
-    self.locations = {
+    locations = {
       self.Location.COURTROOM_LEFT: Location(
         name='COURTROOM_LEFT',
         asset_name='defenseempty.png',
@@ -135,7 +187,7 @@ class ClassicTheme:
       ),
     }
 
-    self.characters = {
+    characters = {
       self.Character.PHOENIX: Character(
         name='Phoenix',
         emotions={
@@ -147,7 +199,7 @@ class ClassicTheme:
           "surprise": ["handsondesk"],
           "normal": ["document", "normal", "thinking", "coffee"]
         },
-        location=self.locations[self.Location.COURTROOM_LEFT],
+        location=locations[self.Location.COURTROOM_LEFT],
         asset_name='Sprites-phoenix'
       ),
       self.Character.EDGEWORTH: Character(
@@ -161,7 +213,7 @@ class ClassicTheme:
           "surprise": ["handondesk"],
           "normal": ["document", "normal", "thinking"]
         },
-        location=self.locations[self.Location.COURTROOM_RIGHT],
+        location=locations[self.Location.COURTROOM_RIGHT],
         asset_name='Sprites-edgeworth'
       ),
       self.Character.GODOT: Character(
@@ -175,7 +227,7 @@ class ClassicTheme:
           "surprise": ["steams"],
           "normal": ["normal"],
         },
-        location=self.locations[self.Location.COURTROOM_RIGHT],
+        location=locations[self.Location.COURTROOM_RIGHT],
         asset_name='Sprites-Godot'
       ),
       self.Character.FRANZISKA: Character(
@@ -189,7 +241,7 @@ class ClassicTheme:
           "surprise": ["withwhip"],
           "normal": ["ready"],
         },
-        location=self.locations[self.Location.COURTROOM_RIGHT],
+        location=locations[self.Location.COURTROOM_RIGHT],
         asset_name='Sprites-franziska'
       ),
       self.Character.JUDGE: Character(
@@ -203,7 +255,7 @@ class ClassicTheme:
           "surprise": ["warning"],
           "normal": ["normal"],
         },
-        location=self.locations[self.Location.JUDGE_STAND],
+        location=locations[self.Location.JUDGE_STAND],
         asset_name='Sprites-judge'
       ),
       self.Character.LARRY: Character(
@@ -217,7 +269,7 @@ class ClassicTheme:
           "surprise": ["nervous"],
           "normal": ["normal"],
         },
-        location=self.locations[self.Location.WITNESS_STAND],
+        location=locations[self.Location.WITNESS_STAND],
         asset_name='Sprites-larry'
       ),
       self.Character.MAYA: Character(
@@ -231,7 +283,7 @@ class ClassicTheme:
           "surprise": ["bench-hum"],
           "normal": ["bench-profile"],
         },
-        location=self.locations[self.Location.CO_COUNCIL],
+        location=locations[self.Location.CO_COUNCIL],
         asset_name='Sprites-maya'
       ),
       self.Character.KARMA: Character(
@@ -245,7 +297,7 @@ class ClassicTheme:
           "surprise": ["break"],
           "normal": ["normal"],
         },
-        location=self.locations[self.Location.COURTROOM_RIGHT],
+        location=locations[self.Location.COURTROOM_RIGHT],
         asset_name='Sprites-karma'
       ),
       self.Character.PAYNE: Character(
@@ -259,7 +311,7 @@ class ClassicTheme:
           "surprise": ["sweating"],
           "normal": ["normal"],
         },
-        location=self.locations[self.Location.COURTROOM_RIGHT],
+        location=locations[self.Location.COURTROOM_RIGHT],
         asset_name='Sprites-payne'
       ),
       self.Character.MAGGEY: Character(
@@ -273,7 +325,7 @@ class ClassicTheme:
           "surprise": ["sad"],
           "normal": ["normal"],
         },
-        location=self.locations[self.Location.WITNESS_STAND],
+        location=locations[self.Location.WITNESS_STAND],
         asset_name='Sprites-Maggey'
       ),
       self.Character.PEARL: Character(
@@ -287,7 +339,7 @@ class ClassicTheme:
           "surprise": ["surprised"],
           "normal": ["normal", "thinking", "shy"],
         },
-        location=self.locations[self.Location.WITNESS_STAND],
+        location=locations[self.Location.WITNESS_STAND],
         asset_name='Sprites-Pearl'
       ),
       self.Character.LOTTA: Character(
@@ -301,7 +353,7 @@ class ClassicTheme:
           "surprise": ["mad"],
           "normal": ["normal", "shy", "thinking"],
         },
-        location=self.locations[self.Location.WITNESS_STAND],
+        location=locations[self.Location.WITNESS_STAND],
         asset_name='Sprites-lotta'
       ),
       self.Character.GUMSHOE: Character(
@@ -315,7 +367,7 @@ class ClassicTheme:
           "surprise": ["disheartened"],
           "normal": ["normal", "side", "thinking"],
         },
-        location=self.locations[self.Location.WITNESS_STAND],
+        location=locations[self.Location.WITNESS_STAND],
         asset_name='Sprites-gumshoe'
       ),
       self.Character.GROSSBERG: Character(
@@ -329,10 +381,23 @@ class ClassicTheme:
           "surprise": ["sweating"],
           "normal": ["normal"],
         },
-        location=self.locations[self.Location.WITNESS_STAND],
+        location=locations[self.Location.WITNESS_STAND],
         asset_name='Sprites-grossberg'
       ),
     }
+
+    super().__init__(
+      actions=actions,
+      emotion_music=emotion_music,
+      locations=locations,
+      characters=characters
+    )
+    self.assets_folder = os.path.join(assets_folder, self.theme)
+    self.default_animation_length = 11
+    self.lag_frames = 25
+    self.text_box_max_line_count = 32
+    self.fps = 18
+    self.scaling_factor = scaling_factor
 
     self.arrow = animation_cache.get_anim_img(
       os.path.join(self.assets_folder, 'arrow.png'),
@@ -371,7 +436,7 @@ class ClassicTheme:
       f"{self.assets_folder}/Payne - Objection.mp3"
     )
 
-  def get_sfx_audio(self, se):
+  def get_sfx_audio(self, se: SoundEffect):
     se_duration = int(se.length * self.spf)
     if se.type == "silence":
       se_audio = AudioSegment.silent(duration=se_duration)
@@ -382,7 +447,7 @@ class ClassicTheme:
       raise ValueError(f'Unknown sound effect type: {se.type}')
     return se_audio
 
-  def get_character_sfx_audio(self, character_se):
+  def get_character_sfx_audio(self, character_se: CharacterSoundEffect):
     se = character_se.sound_effect
     se_duration = int(se.length * self.spf)
     if se.type == "objection":
@@ -399,7 +464,7 @@ class ClassicTheme:
       raise ValueError(f'Unknown character sound effect type: {se.type}')
     return se_audio
 
-  def get_music_audio(self, cue_music_effect):
+  def get_music_audio(self, cue_music_effect: CueMusicEffect):
     track_duration = int(cue_music_effect.length * self.spf)
     track_path = f'{self.assets_folder}/{cue_music_effect.music_effect.track}.mp3'
     music_audio = AudioSegment.from_mp3(track_path)[:track_duration]
@@ -630,25 +695,6 @@ class ClassicTheme:
       )
     )
     return animations, sfx, current_frame
-
-  class Character(IntEnum):
-    PHOENIX = 1
-    EDGEWORTH = 2
-    GODOT = 3
-    FRANZISKA = 4
-    JUDGE = 5
-    LARRY = 6
-    MAYA = 7
-    KARMA = 8
-    PAYNE = 9
-    MAGGEY = 10
-    PEARL = 11
-    LOTTA = 12
-    GUMSHOE = 13
-    GROSSBERG = 14
-
-    def __str__(self):
-      return str(self.name).capitalize()
 
 
 def split_str_into_newlines(text: str, max_line_count):

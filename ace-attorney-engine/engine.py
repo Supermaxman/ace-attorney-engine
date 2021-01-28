@@ -4,33 +4,28 @@ import random
 import spacy
 import string
 from textwrap import wrap
-from typing import List, Dict
+from typing import List
 
 import ffmpeg
 from pydub import AudioSegment
 from tqdm import tqdm
 import numpy as np
 
-from animation import animation_cache, SceneAnimation
-
-# from script_constants import Location, Character, Action, location_map, character_map, character_location_map, \
-#   audio_emotions, character_emotions, \
-#   action_music, action_emotions
+from animation import animation_cache
 
 from emotions import EmotionModel
 
-from scenes import CharacterBeat, CharacterCue, CharacterShot, SoundEffect, MusicEffect, \
-  CharacterSoundEffect, CueMusicEffect
+from scenes import CharacterBeat, CharacterCue, CharacterShot, CueMusicEffect
 
-from comments import Comment, EmotionComment, Author
+from comments import Comment, EmotionComment
 
-from game_themes import ClassicTheme
+from game_themes import Theme
 
 
 class PhoenixEngine:
   def __init__(
     self,
-    theme,
+    theme: Theme,
     emotion_model='mrm8488/t5-base-finetuned-emotion',
     sentence_model='en_core_web_sm',
     emotion_threshold=0.5,
@@ -104,9 +99,7 @@ class PhoenixEngine:
         r=self.fps,
         acodec=self.audio_codec,
         crf=self.video_crf
-      )
-        .overwrite_output()
-        .run_async(pipe_stdin=True)
+      ).overwrite_output().run_async(pipe_stdin=True)
     )
     process.wait()
 
@@ -248,9 +241,7 @@ class PhoenixEngine:
                 vcodec=self.video_codec,
                 r=self.fps,
                 crf=self.video_crf
-              )
-                .overwrite_output()
-                .run_async(pipe_stdin=True)
+              ).overwrite_output().run_async(pipe_stdin=True)
             )
           process.stdin.write(
             frame_array.astype(np.uint8).tobytes()
@@ -325,4 +316,3 @@ class PhoenixEngine:
         yield animation
       for sound_effect in sfx:
         beat.sfx.append(sound_effect)
-
