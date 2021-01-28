@@ -4,7 +4,8 @@ import os
 import engine
 from settings import Settings
 from comments import Author
-from script_constants import Character
+from game_themes import ClassicTheme
+
 import data_utils
 
 
@@ -15,22 +16,27 @@ if __name__ == '__main__':
   max_length = Settings.MAX_COMMENT_LENGTH
   output_filename = Settings.OUTPUT_FILENAME
 
+  theme = ClassicTheme(
+    Settings.ASSETS_FOLDER,
+    Settings.SCALING_FACTOR
+  )
+
   characters = [
     Author(
       name='Randolph',
-      character=Character.JUDGE
+      character=theme.Character.JUDGE
     ),
     Author(
       name='Kaffee',
-      character=Character.PHOENIX
+      character=theme.Character.PHOENIX
     ),
     Author(
       name='Jessep',
-      character=Character.GUMSHOE
+      character=theme.Character.GUMSHOE
     ),
     Author(
       name='Ross',
-      character=Character.EDGEWORTH
+      character=theme.Character.EDGEWORTH
     ),
   ]
   comments = data_utils.load_script(
@@ -38,9 +44,8 @@ if __name__ == '__main__':
     characters,
     max_length
   )
-
   engine = engine.PhoenixEngine(
-    theme=Settings.THEME,
+    theme=theme,
     emotion_model=Settings.EMOTION_MODEL,
     sentence_model=Settings.SENTENCE_MODEL,
     emotion_threshold=Settings.EMOTION_THRESHOLD,
@@ -51,8 +56,6 @@ if __name__ == '__main__':
     video_crf=Settings.VIDEO_CRF,
     lag_frames=Settings.LAG_FRAMES,
     default_animation_length=Settings.DEFAULT_ANIMATION_LENGTH,
-    scaling_factor=Settings.SCALING_FACTOR,
-    assets_folder=Settings.ASSETS_FOLDER,
     cache_folder=Settings.CACHE_FOLDER,
   )
   engine.animate(
